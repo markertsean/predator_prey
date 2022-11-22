@@ -3,7 +3,7 @@ import math
 import sys
 import os
 
-sys.path.append('/'.join( (os.getcwd() + '/' + __file__).split('/')[:-2] )+'/')
+sys.path.append('/'.join( __file__.split('/')[:-2] )+'/')
 
 import characters.parameters as parameters
 
@@ -91,6 +91,10 @@ class Character:
     def update(self):
         pass
 
+    def get_param(self,name):
+        assert name in self.__dict__
+        return self.__dict__[name]
+
     def get_name(self):
         return None
 
@@ -98,10 +102,10 @@ class Character:
         return self.x, self.y
 
     def get_speed(self):
-        return self.speed.value()
+        return self.speed.value
 
     def get_orientation(self):
-        return self.orientation.value()
+        return self.orientation.value
     
     def percieve(self):
         pass

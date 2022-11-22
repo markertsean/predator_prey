@@ -24,6 +24,13 @@ def initialize_characters_homogenous_isotropic(initialize_dict,inp_box):
                 )
             )
 
+def save_setup_logfile( input_parameters, input_box ):
+    os.makedirs(input_box.get_param('output_path'),exist_ok=True)
+    fn = "setup.log"
+    with open(input_box.get_param('output_path')+fn,'w') as f:
+        for key in input_parameters:
+            f.write("{}:{}\n".format(key,input_parameters[key]))
+    print("Wrote "+input_box.get_param('output_path')+fn)
 
 def main():
     simulation_parameters = {
@@ -41,11 +48,14 @@ def main():
     box = simulator.SimulationBox(
         simulation_parameters['box_size'],
         simulation_parameters['cell_size'],
+        int(simulation_parameters['max_steps']),
         simulation_parameters['time_step'],
         simulation_parameters['abs_max_speed'],
         simulation_parameters['snapshot_step'],
         simulation_parameters['seed'],
     )
+
+    save_setup_logfile( simulation_parameters, box )
 
     initialize_dict = {}
     initialize_dict['prey'] = (
@@ -55,6 +65,9 @@ def main():
         characters.Prey
     )
     initialize_characters_homogenous_isotropic(initialize_dict,box)
+
+    box.run_simulation()
+
 
 if __name__ == "__main__":
     #inp_args = __read_args__()

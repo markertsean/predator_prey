@@ -1,9 +1,12 @@
+from datetime import datetime
 import numpy as np
 import random
+import pickle as pkl
 import sys
 import os
 
-sys.path.append('/'.join( (os.getcwd() + '/' + __file__).split('/')[:-2] )+'/')
+__project_path__='/'.join( __file__.split('/')[:-2] )+'/'
+sys.path.append(__project_path__)
 
 import characters.characters as characters
 
@@ -12,10 +15,12 @@ class SimulationBox:
         self,
         box_size,
         cell_size,
+        n_steps,
         time_step,
         max_speed,
         snapshot_step,
         seed,
+        output_path = __project_path__+"data/",
     ):
         assert isinstance(box_size,float) or isinstance(box_size,int)
         self.length = float(box_size)
@@ -24,6 +29,11 @@ class SimulationBox:
         assert cell_size<self.length
         self.n_cells = round(self.length/cell_size)
         self.cell_length = float(self.length/self.n_cells)
+
+        assert isinstance(n_steps,int)
+        assert n_steps > 0
+        self.n_steps = n_steps
+        self.current_step = 0
 
         assert isinstance(time_step,float) or isinstance(time_step,int)
         self.time_step = float(time_step)
@@ -37,6 +47,9 @@ class SimulationBox:
         assert (seed is None) or isinstance(seed,int)
         self.seed = seed
         random.seed(self.seed)
+
+        assert isinstance(output_path,str)
+        self.output_path = output_path + datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
 
         self.cell_dict = self.__generate_blank_cell_dict__()
 
@@ -119,9 +132,9 @@ class SimulationBox:
             cell = self.cell_dict[cell_number]
             for c in cell:
                 new_x, new_y = self.update_solo_position(c)
-                character.update_pos( new_x, new_y )
+                c.update_pos( new_x, new_y )
                 new_cell = self.get_cell_1D( new_x, new_y )
-                new_position_dict[new_cell].append(character)
+                new_position_dict[new_cell].append(c)
 
         self.cell_dict = new_position_dict
 
@@ -131,8 +144,55 @@ class SimulationBox:
         # Spawn step
 
     def generate_snapshots(self):
-        pass
+        output_path = self.output_path + 'character_snapshots/'
+        os.makedirs(output_path,exist_ok=True)
+
+        output_fn = 'character_snapshot_{:09d}.pkl'.format(self.current_step)
+        with open(output_path+output_fn,'wb') as f:
+            for key in sorted(self.cell_dict.keys()):
+                for c in self.cell_dict[key]:
+                    pkl.dump(c,f)
+
+        output_fn = 'simple_snapshot_{:09d}.pkl'.format(self.current_step)
+        with open(output_path+output_fn,'wb') as f:
+            for key in sorted(self.cell_dict.keys()):
+                for c in self.cell_dict[key]:
+                    out_dict = {
+                        'id':c.get_param('id'),
+                        'name':c.get_param('name'),
+                        'x':c.get_param('x'),
+                        'y':c.get_param('y'),
+                        'speed':c.get_speed(),
+                        'orientation':c.get_orientation(),
+                    }
+                    pkl.dump(out_dict,f)
+
 
     def iterate_step(self):
-        iterate_characters(self)
-        generate_snapshots(self)
+        self.iterate_characters()
+        if (self.current_step % self.snapshot_step == 0 ):
+            self.generate_snapshots()
+
+    def run_simulation(self):
+        start_time = datetime.now()
+        prev_time = start_time
+        for i in range(0,self.n_steps):
+            self.iterate_step()
+
+            if (self.current_step % self.snapshot_step == 0 ):
+                now = datetime.now()
+                s = (now-start_time).total_seconds()
+                hours, remainder = divmod(s, 3600)
+                minutes, seconds = divmod(remainder, 60)
+                print(
+                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
+                        self.current_step,
+                        (now-prev_time).total_seconds(),
+                        int(hours),
+                        int(minutes),
+                        seconds
+                    )
+                )
+                prev_time=now
+
+            self.current_step = i + 1

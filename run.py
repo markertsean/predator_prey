@@ -34,14 +34,14 @@ def save_setup_logfile( input_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':  1e1 ,
+        'max_steps':  1e2 ,
         'time_step':  1e-1,
         'box_size':   1e0,
         'cell_size':  1e-1,
         'char_size':  1e-4,
         'n_prey':     5e0 ,
         'seed': 42,
-        'abs_max_speed': 1e-2,
+        'abs_max_speed': 1e-1,
         'snapshot_step': 1,
     }
 

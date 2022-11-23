@@ -159,7 +159,7 @@ class SimulationBox:
                 for c in self.cell_dict[key]:
                     out_dict = {
                         'id':c.get_param('id'),
-                        'name':c.get_param('name'),
+                        'name':c.get_name(),
                         'x':c.get_param('x'),
                         'y':c.get_param('y'),
                         'speed':c.get_speed(),

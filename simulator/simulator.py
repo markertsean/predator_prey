@@ -168,8 +168,10 @@ class SimulationBox:
     def iterate_characters(self):
         self.update_age_by_cell()
         self.update_energy_by_cell()
-        # Perception step
+        # Eat
         self.update_position_by_cell()
+        # Perception step
+        # Update direction
         # Spawn step
 
     def generate_snapshots(self):

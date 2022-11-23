@@ -73,7 +73,9 @@ def main():
 
     # Food sources extend over boundaries, need to include in plot
     position_wrapped_food_df = extend_food_sources(position_df)
-    
+
+    xy_max = setup_params['box_size']
+    cell_size = setup_params['cell_size']
     fig = px.scatter(
         position_wrapped_food_df,
         x='x',
@@ -86,11 +88,11 @@ def main():
         log_x=False,
         size='size',
         size_max=55,
-        range_x=[0,1],
-        range_y=[0,1],
-        #range_x=[-1,2],
-        #range_y=[-1,2],
+        range_x=[0,xy_max],
+        range_y=[0,xy_max],
     )
+    fig.update_xaxes(tick0=cell_size, dtick=cell_size)
+    fig.update_yaxes(tick0=cell_size, dtick=cell_size)
     fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000*setup_params['time_step']
     fig.show()
 

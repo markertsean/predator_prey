@@ -12,18 +12,27 @@ def initialize_characters_homogenous_isotropic(initialize_dict,inp_box,char_dict
     for key in initialize_dict:
         name, count, size, obj = initialize_dict[key]
         for i in range(0,int(count)):
-            inp_box.embed(
-                obj(
-                    inp_box.get_param('length')*random.random(),
-                    inp_box.get_param('length')*random.random(),
-                    size,
-                    parameters.Speed(
-                        inp_box.get_param('max_speed') * 0.1,
-                        inp_box.get_param('max_speed')
-                    ),
-                    input_parameters=char_dict,
+            if (name == 'food source'):
+                inp_box.embed(
+                    obj(
+                        inp_box.get_param('length')*random.random(),
+                        inp_box.get_param('length')*random.random(),
+                        size,
+                    )
                 )
-            )
+            else:
+                inp_box.embed(
+                    obj(
+                        inp_box.get_param('length')*random.random(),
+                        inp_box.get_param('length')*random.random(),
+                        size,
+                        parameters.Speed(
+                            inp_box.get_param('max_speed') * 0.1,
+                            inp_box.get_param('max_speed')
+                        ),
+                        input_parameters=char_dict,
+                    )
+                )
 
 def save_setup_logfile( input_parameters, input_box ):
     os.makedirs(input_box.get_param('output_path'),exist_ok=True)
@@ -46,13 +55,16 @@ def main():
     }
 
     character_parameters = {
+        'n_food': 5,
+        'food_size': simulation_parameters['cell_size']*1e-1,
+
         'n_prey': 5,
         'prey_size':  1e-4,
 
-        'prey_age': False,
+        'prey_age': True,
         'prey_age_max':5.0,
 
-        'prey_energy': False,
+        'prey_energy': True,
         'prey_energy_max':1.0,
         'prey_energy_speed_delta':0.25, # Per second at max speed
         'prey_energy_time_delta':0.25, # Per second
@@ -71,6 +83,12 @@ def main():
     save_setup_logfile( simulation_parameters, box )
 
     initialize_dict = {}
+    initialize_dict['food'] = (
+        'food source',
+        character_parameters['n_food'],
+        character_parameters['food_size'],
+        characters.FoodSource
+    )
     initialize_dict['prey'] = (
         'prey',
         character_parameters['n_prey'],

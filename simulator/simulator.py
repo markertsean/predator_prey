@@ -131,10 +131,13 @@ class SimulationBox:
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for c in cell:
-                new_x, new_y = self.update_solo_position(c)
-                c.update_pos( new_x, new_y )
-                new_cell = self.get_cell_1D( new_x, new_y )
-                new_position_dict[new_cell].append(c)
+                if ( 'speed' not in c.list_params() ):
+                    new_position_dict[cell_number].append(c)
+                else:
+                    new_x, new_y = self.update_solo_position(c)
+                    c.update_pos( new_x, new_y )
+                    new_cell = self.get_cell_1D( new_x, new_y )
+                    new_position_dict[new_cell].append(c)
 
         self.cell_dict = new_position_dict
 
@@ -143,7 +146,10 @@ class SimulationBox:
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
-                if (char.age_character(self.time_step)):
+                if (
+                    (not ('age' in char.list_params())) or
+                    char.age_character(self.time_step)
+                ):
                     survived_dict[cell_number].append(char)
         self.cell_dict = survived_dict
 
@@ -152,7 +158,10 @@ class SimulationBox:
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
-                if (char.use_energy(self.time_step)):
+                if (
+                    (not ('energy' in char.list_params())) or
+                    char.use_energy(self.time_step)
+                ):
                     survived_dict[cell_number].append(char)
         self.cell_dict = survived_dict
 
@@ -182,6 +191,7 @@ class SimulationBox:
                         'name':c.get_name(),
                         'x':c.get_param('x'),
                         'y':c.get_param('y'),
+                        'size':c.get_param('size'),
                         'speed':c.get_speed(),
                         'orientation':c.get_orientation(),
                         'energy':c.get_energy(),

@@ -92,6 +92,9 @@ class Character:
     def update(self):
         pass
 
+    def list_params(self):
+        return self.__dict__.keys()
+
     def get_param(self,name):
         assert name in self.__dict__
         return self.__dict__[name]
@@ -103,17 +106,25 @@ class Character:
         return self.x, self.y
 
     def get_speed(self):
+        if ('speed' not in self.list_params()):
+            return 0.0
         return self.speed.value
 
     def get_orientation(self):
+        if ('orientation' not in self.list_params()):
+            return -1.0
         return self.orientation.value
 
     def get_age(self):
+        if ('age' not in self.list_params()):
+            return -1.0
         if (self.age is None):
             return -1.0
         return self.age.value
 
     def get_energy(self):
+        if ('energy' not in self.list_params()):
+            return -1.0
         if (self.energy is None):
             return -1.0
         return self.energy.value
@@ -139,6 +150,36 @@ class Character:
 
     def spawn(self):
         pass
+
+
+class FoodSource(Character):
+    def __init__(
+        self,
+        x_init,
+        y_init,
+        size,
+    ):
+        self.collision = False
+        self.id   = Character.id_num
+        Character.id_num += 1
+
+        assert isinstance(x_init,float)
+        assert isinstance(y_init,float)
+        assert isinstance(size  ,float)
+
+        self.x    = x_init
+        self.y    = y_init
+        self.size = size
+        self.name = 'food source'
+
+    #def get_speed(self):
+    #    return 0.0
+    #
+    #def get_orientation(self):
+    #    return 0.0
+
+    def get_name(self):
+        return self.name
 
 class Prey(Character):
     def get_name(self):

@@ -43,6 +43,20 @@ def read_simple(input_path,input_params):
             out_dict['time'].append(timestep)
     return pd.DataFrame.from_dict(out_dict)
 
+def extend_food_sources(inp_df):
+    this_df = inp_df.copy()
+    food_df = this_df.loc[this_df['name']=='food source']
+
+    food_array = [this_df]
+    for x in [-1,0,1]:
+        for y in [-1,0,1]:
+            if ( not( x==0 and y==0 ) ):
+                temp_df = food_df.copy()
+                temp_df['x'] = temp_df['x'] + x
+                temp_df['y'] = temp_df['y'] + y
+                temp_df['id']= temp_df['id'].astype(str)+"_"+str(x)+"_"+str(y)
+                food_array.append(temp_df)
+    return pd.concat(food_array)
 
 def main():
     project_path = '/'.join(os.getcwd().split('/'))+'/'
@@ -57,8 +71,11 @@ def main():
     setup_params = read_setup(input_base_path)
     position_df  = read_simple(input_snap_path,setup_params)
 
+    # Food sources extend over boundaries, need to include in plot
+    position_wrapped_food_df = extend_food_sources(position_df)
+    
     fig = px.scatter(
-        position_df,
+        position_wrapped_food_df,
         x='x',
         y='y',
         animation_frame='time',
@@ -67,9 +84,12 @@ def main():
         hover_name='id',
         hover_data=['speed','orientation','age','energy',],
         log_x=False,
+        size='size',
         size_max=55,
         range_x=[0,1],
         range_y=[0,1],
+        #range_x=[-1,2],
+        #range_y=[-1,2],
     )
     fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000*setup_params['time_step']
     fig.show()

@@ -17,7 +17,8 @@ class Character:
         size,
         speed,
         orientation = None,
-        parent = -1
+        parent = -1,
+        input_parameters = {},
     ):
         self.collision = False
         self.id   = Character.id_num
@@ -47,9 +48,9 @@ class Character:
         assert isinstance(parent,int)
         self.parent = parent
 
-        self.__setup__()
+        self.__setup__(input_parameters)
 
-    def __setup__(self):
+    def __setup__(self,input_parameters):
         pass
 
     def __str__(self):
@@ -106,13 +107,63 @@ class Character:
 
     def get_orientation(self):
         return self.orientation.value
-    
+
+    def get_age(self):
+        if (self.age is None):
+            return -1.0
+        return self.age.value
+
+    def get_energy(self):
+        if (self.energy is None):
+            return -1.0
+        return self.energy.value
+
+    def age_character(self,time_step):
+        if (self.age is None):
+            return True
+        if (self.age.value >= self.age.get_param('max')):
+            return False
+        self.age.update(time_step)
+        return True
+
+    def use_energy(self,time_step):
+        if (self.energy is None):
+            return True
+        if (self.energy.value <= self.energy.get_param('min')):
+            return False
+        self.energy.update(time_step,self.speed.value)
+        return True
+
     def percieve(self):
+        pass
+
+    def spawn(self):
         pass
 
 class Prey(Character):
     def get_name(self):
         return 'prey'
 
-    def __setup__(self):
+    def __setup__(self,params):
         self.collision=True
+
+        if (params['prey_age']):
+            self.age = parameters.CharacterParameter(
+                name='age',
+                minval=0.0,
+                maxval=params['prey_age_max'],
+                value =0.0,
+            )
+        else:
+            self.age = None
+
+        if (params['prey_energy']):
+            self.energy = parameters.Energy(
+                minval                 = 0.0,
+                maxval                 = params['prey_energy_max'],
+                value                  = params['prey_energy_max'],
+                energy_speed_decrement = params['prey_energy_speed_delta'],
+                energy_time_decrement  = params['prey_energy_time_delta'],
+            )
+        else:
+            self.energy = None

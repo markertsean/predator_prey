@@ -115,3 +115,44 @@ class Speed(CharacterParameter):
                 self.value + acceleration
             )
         )
+    
+class Energy(CharacterParameter):
+    def __init__(
+        self,
+        minval = 0.0,
+        maxval = 1.0,
+        value = None,
+        energy_speed_decrement = 0.0,
+        energy_time_decrement = 0.0,
+    ):
+        assert isinstance(minval,float)
+        assert isinstance(maxval,float)
+        assert isinstance(energy_speed_decrement,float)
+        assert isinstance(energy_time_decrement,float)
+        assert maxval>= minval
+        if (value is not None):
+            assert isinstance(value,float)
+        else:
+            value = maxval
+
+        self.name  = 'energy'
+        self.value = value
+        self.max   = maxval
+        self.min   = minval
+        self.speed_delta = abs(energy_speed_decrement)
+        self.time_delta = abs(energy_time_decrement)
+
+    def update(
+        self,
+        time_step,
+        speed=0.0,
+    ):
+        self.value = min(
+            self.max,
+            max(
+                self.min,
+                self.value -
+                self.speed_delta * time_step * speed -
+                self.time_delta * time_step
+            )
+        )

@@ -8,7 +8,7 @@ import simulator.simulator as simulator
 import characters.characters as characters
 import characters.parameters as parameters
 
-def initialize_characters_homogenous_isotropic(initialize_dict,inp_box):
+def initialize_characters_homogenous_isotropic(initialize_dict,inp_box,char_dict):
     for key in initialize_dict:
         name, count, size, obj = initialize_dict[key]
         for i in range(0,int(count)):
@@ -20,7 +20,8 @@ def initialize_characters_homogenous_isotropic(initialize_dict,inp_box):
                     parameters.Speed(
                         inp_box.get_param('max_speed') * 0.1,
                         inp_box.get_param('max_speed')
-                    )
+                    ),
+                    input_parameters=char_dict,
                 )
             )
 
@@ -38,11 +39,23 @@ def main():
         'time_step':  1e-1,
         'box_size':   1e0,
         'cell_size':  1e-1,
-        'char_size':  1e-4,
-        'n_prey':     5e0 ,
         'seed': 42,
         'abs_max_speed': 1e-1,
         'snapshot_step': 1,
+        
+    }
+
+    character_parameters = {
+        'n_prey': 5,
+        'prey_size':  1e-4,
+
+        'prey_age': False,
+        'prey_age_max':5.0,
+
+        'prey_energy': False,
+        'prey_energy_max':1.0,
+        'prey_energy_speed_delta':0.25, # Per second at max speed
+        'prey_energy_time_delta':0.25, # Per second
     }
 
     box = simulator.SimulationBox(
@@ -60,11 +73,11 @@ def main():
     initialize_dict = {}
     initialize_dict['prey'] = (
         'prey',
-        simulation_parameters['n_prey'],
-        simulation_parameters['char_size'],
+        character_parameters['n_prey'],
+        character_parameters['prey_size'],
         characters.Prey
     )
-    initialize_characters_homogenous_isotropic(initialize_dict,box)
+    initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
     box.run_simulation()
 

@@ -138,7 +138,27 @@ class SimulationBox:
 
         self.cell_dict = new_position_dict
 
+    def update_age_by_cell(self):
+        survived_dict = self.__generate_blank_cell_dict__()
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            for char in cell:
+                if (char.age_character(self.time_step)):
+                    survived_dict[cell_number].append(char)
+        self.cell_dict = survived_dict
+
+    def update_energy_by_cell(self):
+        survived_dict = self.__generate_blank_cell_dict__()
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            for char in cell:
+                if (char.use_energy(self.time_step)):
+                    survived_dict[cell_number].append(char)
+        self.cell_dict = survived_dict
+
     def iterate_characters(self):
+        self.update_age_by_cell()
+        self.update_energy_by_cell()
         # Perception step
         self.update_position_by_cell()
         # Spawn step
@@ -164,6 +184,8 @@ class SimulationBox:
                         'y':c.get_param('y'),
                         'speed':c.get_speed(),
                         'orientation':c.get_orientation(),
+                        'energy':c.get_energy(),
+                        'age':c.get_age(),
                     }
                     pkl.dump(out_dict,f)
 

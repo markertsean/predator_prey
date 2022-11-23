@@ -65,7 +65,7 @@ def main():
         animation_group='id',
         color='name',
         hover_name='id',
-        hover_data=['speed','orientation'],
+        hover_data=['speed','orientation','age','energy',],
         log_x=False,
         size_max=55,
         range_x=[0,1],

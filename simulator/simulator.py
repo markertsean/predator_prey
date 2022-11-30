@@ -43,7 +43,7 @@ class SimulationBox:
         self.max_speed = float(max_speed)
 
         assert isinstance(snapshot_step,float) or isinstance(snapshot_step,int)
-        self.snapshot_step = snapshot_step               
+        self.snapshot_step = snapshot_step
 
         assert (seed is None) or isinstance(seed,int)
         self.seed = seed
@@ -65,12 +65,17 @@ class SimulationBox:
         return out_str
 
     # Provides dict of 1D cells, value is list of all neighboring cells
+    # Additionallly, generates offset list, so cell can appropriately add open boundaries
     def __generate_linked_list__(self):
         self.linked_list = {}
+        self.boundary_offset_list = {}
         for x_n in range(0,self.n_cells):
             for y_n in range(0,self.n_cells):
                 cell_index = self.convert_cell_2D_to_1D(x_n,y_n)
                 self.linked_list[ cell_index ] = []
+                self.boundary_offset_list[ cell_index ] = {}
+                list_index = 0
+
                 for x_n_neighbor in [x_n-1,x_n,x_n+1]:
                     for y_n_neighbor in [y_n-1,y_n,y_n+1]:
                         self.linked_list[cell_index].append(
@@ -79,6 +84,20 @@ class SimulationBox:
                                 y_n_neighbor % self.n_cells
                             )
                         )
+
+                        x_off = 0.0
+                        if ( x_n_neighbor < 0.0 ):
+                            x_off =-1.0
+                        elif ( x_n_neighbor >= self.n_cells ):
+                            x_off = 1.0
+                        y_off = 0.0
+                        if ( y_n_neighbor < 0.0 ):
+                            y_off =-1.0
+                        elif ( y_n_neighbor >= self.n_cells ):
+                            y_off = 1.0
+
+                        self.boundary_offset_list[cell_index][list_index] = x_off*self.length,y_off*self.length
+                        list_index += 1
 
     def __generate_blank_cell_dict__(self):
         cell_dict = {}
@@ -102,7 +121,7 @@ class SimulationBox:
     def convert_cell_2D_to_1D(self,x_cell,y_cell):
         return self.n_cells * y_cell + x_cell
 
-    # [[0 1][2 3]] 
+    # [[0 1][2 3]]
     def get_cell_1D(self,x,y):
         x_cell, y_cell = self.get_cell_2D(x,y)
         return self.convert_cell_2D_to_1D( x_cell, y_cell )
@@ -112,6 +131,9 @@ class SimulationBox:
         x_cell = int(x / self.length * self.n_cells)
         y_cell = int(y / self.length * self.n_cells)
         return x_cell, y_cell
+
+    def get_boundary_offset(self,cell_number,i_tracker):
+        return self.boundary_offset_list[cell_number][i_tracker]
 
     def embed(self,inp_char):
         assert isinstance(inp_char,characters.Character) or issubclass(inp_char,characters.Character)
@@ -136,12 +158,17 @@ class SimulationBox:
         return 2
 
     # TODO: implement "mouth" based on orientation
-    # TODO: implement check for boundary crossed
     def check_collisions_feed(self,inp_char,new_x,new_y,cell_number,new_position_dict):
         # Ignore checking against self
         checked_ids = [inp_char.get_param('id')]
         consumed_chars = []
+
+        ll_cell_tracker = 0
         for neighbor_cell_linked in self.linked_list[cell_number]:
+
+            # Offsets due to open box
+            x_offset, y_offset = self.get_boundary_offset(cell_number,ll_cell_tracker)
+            ll_cell_tracker += 1
 
             # Check updated positions first, then non-updated
             for pos_dict in [new_position_dict,self.cell_dict]:
@@ -153,8 +180,8 @@ class SimulationBox:
 
                     checked_ids.append(character.get_param('id'))
                     overlap_val = self.overlap(
-                        character.get_param('x'),
-                        character.get_param('y'),
+                        character.get_param('x') + x_offset,
+                        character.get_param('y') + y_offset,
                         character.get_param('radius'),
                         inp_char.get_param('x'),
                         inp_char.get_param('y'),
@@ -199,6 +226,8 @@ class SimulationBox:
                 else:
                     new_x, new_y = self.update_solo_position(c)
                     coll_x, coll_y, consumed_chars = self.check_collisions_feed(c,new_x,new_y,cell_number,new_position_dict)
+                    coll_x = coll_x % self.length
+                    coll_y = coll_y % self.length
                     c.update_pos( coll_x, coll_y )
                     new_cell = self.get_cell_1D( coll_x, coll_y )
                     new_position_dict[new_cell].append(c)
@@ -248,7 +277,6 @@ class SimulationBox:
             (char_2.get_param('x')-char_1.get_param('x'))
         )
 
-    # TODO: Deal with open boundaries
     def update_vision_by_cell(self):
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
@@ -259,9 +287,12 @@ class SimulationBox:
                 ):
                     continue
 
-                print(char.get_param('id'))
                 char.get_param('eyes').reset_vision(0.0)
+                ll_cell_tracker = 0
                 for neighbor_cell_linked in self.linked_list[cell_number]:
+                    # Offsets due to open box
+                    x_offset, y_offset = self.get_boundary_offset(cell_number,ll_cell_tracker)
+                    ll_cell_tracker += 1
                     for visible_obj in self.cell_dict[neighbor_cell_linked]:
 
                         if (char.get_param('id') == visible_obj.get_param('id')):
@@ -271,8 +302,8 @@ class SimulationBox:
                             char.get_param('x'),
                             char.get_param('y'),
                             char.get_param('radius'),
-                            visible_obj.get_param('x'),
-                            visible_obj.get_param('y'),
+                            visible_obj.get_param('x') + x_offset,
+                            visible_obj.get_param('y') + y_offset,
                             visible_obj.get_param('radius')
                         )
 
@@ -281,28 +312,7 @@ class SimulationBox:
                             ang_obj_char = ( self.relative_angle_between_characters( char, visible_obj ) - char.get_param('orientation').value ) % (2*math.pi)
                             left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
                             right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
-                            #print(cell_number,neighbor_cell_linked,
-                            #      obj_dist,
-                            #      char.get_param('id'),
-                            #      visible_obj.get_param('id'),
-                            #    char.get_param('eyes').get_param('max_dist'),
-                            #    char.get_param('orientation').value * 180 / math.pi,
-                            #    left_obj_angle * 180 / math.pi,
-                            #    ang_obj_char * 180/math.pi,
-                            #    right_obj_angle * 180/math.pi,
-                            #)
                             char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
-                            #print()
-                #REMOVE
-                eyes = char.get_param('eyes')
-                this_str = '[ '
-                for i in eyes.left['food source']:
-                    this_str+=str(i)+", "
-                this_str += ']\n['
-                for i in eyes.right['food source']:
-                    this_str+=str(i)+", "
-                this_str += ']'
-                print(this_str)
 
     def iterate_characters(self):
         self.update_age_by_cell()
@@ -357,16 +367,15 @@ class SimulationBox:
                 s = (now-start_time).total_seconds()
                 hours, remainder = divmod(s, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                ###############
-                #print(
-                #    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
-                #        self.current_step,
-                #        (now-prev_time).total_seconds(),
-                #        int(hours),
-                #        int(minutes),
-                #        seconds
-                #    )
-                #)
+                print(
+                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
+                        self.current_step,
+                        (now-prev_time).total_seconds(),
+                        int(hours),
+                        int(minutes),
+                        seconds
+                    )
+                )
                 prev_time=now
 
             self.current_step = i + 1

@@ -106,56 +106,21 @@ def main():
 
     save_setup_logfile( simulation_parameters, character_parameters, box )
 
-    #initialize_dict = {}
-    #initialize_dict['food'] = (
-    #    'food source',
-    #    character_parameters['n_food'],
-    #    character_parameters['food_size'],
-    #    characters.FoodSource
-    #)
-    #initialize_dict['prey'] = (
-    #    'prey',
-    #    character_parameters['n_prey'],
-    #    character_parameters['prey_size'],
-    #    characters.Prey
-    #)
-    #initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
+    initialize_dict = {}
+    initialize_dict['food'] = (
+        'food source',
+        character_parameters['n_food'],
+        character_parameters['food_size'],
+        characters.FoodSource
+    )
+    initialize_dict['prey'] = (
+        'prey',
+        character_parameters['n_prey'],
+        character_parameters['prey_size'],
+        characters.Prey
+    )
+    initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
-    box.embed(
-        characters.FoodSource(
-            0.25,
-            0.50,
-            0.25,
-        )
-    )
-    box.embed(
-        characters.FoodSource(
-            0.75,
-            0.50,
-            0.25,
-        )
-    )
-    box.embed(
-        characters.FoodSource(
-            0.6 ,
-            0.5 ,
-            0.05,
-        )
-    )
-    box.embed(
-        characters.Prey(
-            0.5,
-            0.1,
-            1e-1,
-            parameters.Speed(
-                0.1,
-                0.1,
-                0.05
-            ),
-            orientation = math.pi/2,
-            input_parameters=character_parameters,
-        )
-    )
     box.run_simulation()
 
 if __name__ == "__main__":

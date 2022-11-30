@@ -208,16 +208,10 @@ class VisionObj:
 
     def place_in_vision(self,obj_type,dist,left_angle,right_angle,max_dist = 10):
         vision_dist = 0
-        if ( abs(dist) < 1e(-max_dist) ):
+        if ( abs(dist) < 10**(-max_dist) ):
             vision_dist = max_dist
         else:
             vision_dist = min(max_dist,np.log10(self.max_dist/dist))
-
-        #print("vis_dist: ",vision_dist)
-        #
-        #for l,m,r in self.eye_rays():
-        #    print("Rays: ",l*180/math.pi,m*180/math.pi,r*180/math.pi)
-
 
         for lr, init_bit_center, direction in [
             (self.left ,self.left_ray_angles[0],1),
@@ -225,23 +219,18 @@ class VisionObj:
         ]:
             step = self.ray_width * direction
             base = init_bit_center + direction * step / 2.
-            #print("base step",base*180/math.pi,step*180/math.pi)
 
             left_bin  = ( left_angle-base) / step
             right_bin = (right_angle-base) / step
 
             leftmost_bin  = self.n_rays
             rightmost_bin = -1
-            #print("left rightmost: ", leftmost_bin,rightmost_bin)
-            #print("left right angle",left_angle*180/math.pi,right_angle*180/math.pi)
-            #print("left right bin",left_bin,right_bin)
             # Locate edges of bins
             for x_bin in [int(left_bin),int(right_bin)]:
                 if (x_bin < leftmost_bin):
                     leftmost_bin = int(x_bin)
                 if (x_bin > rightmost_bin):
                     rightmost_bin = int(x_bin)
-            #print("leftmost rightmost left right",leftmost_bin,rightmost_bin,int(left_bin),int(right_bin))
 
             # Possible no ray directly in bin, but object crosses bin
             if (

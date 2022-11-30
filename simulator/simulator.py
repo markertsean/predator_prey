@@ -1,4 +1,5 @@
 from datetime import datetime
+import math
 import numpy as np
 import random
 import pickle as pkl
@@ -26,7 +27,7 @@ class SimulationBox:
         self.length = float(box_size)
 
         assert isinstance(cell_size,float) or isinstance(cell_size,int)
-        assert cell_size<self.length
+        assert cell_size<=self.length
         self.n_cells = round(self.length/cell_size)
         self.cell_length = float(self.length/self.n_cells)
 
@@ -126,8 +127,70 @@ class SimulationBox:
         new_y = ( y + s * np.sin(theta) ) % self.length
         return new_x, new_y
 
+    def overlap(self, x1, y1, r1, x2, y2, r2 ):
+        dist = np.sqrt( (x2-x1)**2 + (y2-y1)**2 )
+        if ( dist>r1+r2 ):
+            return 0
+        if ( dist==r1+r2 ):
+            return 1
+        return 2
+
+    # TODO: implement "mouth" based on orientation
+    # TODO: implement check for boundary crossed
+    def check_collisions_feed(self,inp_char,new_x,new_y,cell_number,new_position_dict):
+        # Ignore checking against self
+        checked_ids = [inp_char.get_param('id')]
+        consumed_chars = []
+        for neighbor_cell_linked in self.linked_list[cell_number]:
+
+            # Check updated positions first, then non-updated
+            for pos_dict in [new_position_dict,self.cell_dict]:
+
+                for character in pos_dict[neighbor_cell_linked]:
+                    # Ignore repeats, IE already updated
+                    if ( character.get_param('id') in checked_ids ):
+                        continue
+
+                    checked_ids.append(character.get_param('id'))
+                    overlap_val = self.overlap(
+                        character.get_param('x'),
+                        character.get_param('y'),
+                        character.get_param('radius'),
+                        inp_char.get_param('x'),
+                        inp_char.get_param('y'),
+                        inp_char.get_param('radius')
+                    )
+                    # No collision
+                    if (overlap_val == 0):
+                        continue
+
+                    # Would overlap, both particles have collision
+                    if (
+                        (overlap_val == 2) and
+                        inp_char.get_param('collision') and
+                        character.get_param('collision')
+                    ):
+                        inp_char.speed.value = (
+                            inp_char.get_param('radius') +
+                            character.get_param('radius')
+                        ) / self.time_step
+                        new_x, new_y = self.update_solo_position(inp_char)
+
+                    # Eat if it's a food source for the moved particle
+                    if (
+                        ('eats' in inp_char.list_params()) and
+                        (inp_char.get_param('eats')) and
+                        (character.get_name()==inp_char.get_param('food_source'))
+                    ):
+                        inp_char.eat()
+                        if (character.get_param('consumed')):
+                            consumed_chars.append(character.get_param('id'))
+
+        return new_x, new_y, consumed_chars
+
     def update_position_by_cell(self):
         new_position_dict = self.__generate_blank_cell_dict__()
+        all_consumed_chars = []
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for c in cell:
@@ -135,11 +198,19 @@ class SimulationBox:
                     new_position_dict[cell_number].append(c)
                 else:
                     new_x, new_y = self.update_solo_position(c)
-                    c.update_pos( new_x, new_y )
-                    new_cell = self.get_cell_1D( new_x, new_y )
+                    coll_x, coll_y, consumed_chars = self.check_collisions_feed(c,new_x,new_y,cell_number,new_position_dict)
+                    c.update_pos( coll_x, coll_y )
+                    new_cell = self.get_cell_1D( coll_x, coll_y )
                     new_position_dict[new_cell].append(c)
+                    all_consumed_chars += consumed_chars
 
-        self.cell_dict = new_position_dict
+        for cell_number in new_position_dict:
+            cell = new_position_dict[cell_number]
+            cell_w_removed = []
+            for character in cell:
+                if ( character.get_param('id') not in all_consumed_chars ):
+                    cell_w_removed.append(character)
+            self.cell_dict[cell_number] = cell_w_removed
 
     def update_age_by_cell(self):
         survived_dict = self.__generate_blank_cell_dict__()
@@ -165,11 +236,79 @@ class SimulationBox:
                     survived_dict[cell_number].append(char)
         self.cell_dict = survived_dict
 
+    def distance_two_points(self,x1,y1,x2,y2):
+        return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
+
+    def distance_two_circles(self,x1,y1,r1,x2,y2,r2):
+        return max(self.distance_two_points(x1,y1,x2,y2)-r1-r2,0)
+
+    def relative_angle_between_characters(self,char_1,char_2):
+        return math.atan2(
+            (char_2.get_param('y')-char_1.get_param('y')),
+            (char_2.get_param('x')-char_1.get_param('x'))
+        )
+
+    # TODO: Deal with open boundaries
+    def update_vision_by_cell(self):
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            for char in cell:
+                if (
+                    ('vision' not in char.list_params()) or
+                    (not char.get_param('vision'))
+                ):
+                    continue
+
+                print(char.get_param('id'))
+                char.get_param('eyes').reset_vision(0.0)
+                for neighbor_cell_linked in self.linked_list[cell_number]:
+                    for visible_obj in self.cell_dict[neighbor_cell_linked]:
+
+                        if (char.get_param('id') == visible_obj.get_param('id')):
+                            continue
+
+                        obj_dist = self.distance_two_circles(
+                            char.get_param('x'),
+                            char.get_param('y'),
+                            char.get_param('radius'),
+                            visible_obj.get_param('x'),
+                            visible_obj.get_param('y'),
+                            visible_obj.get_param('radius')
+                        )
+
+                        # Only check vision lines if close enough
+                        if ( char.get_param('eyes').get_param('max_dist') >= obj_dist ):
+                            ang_obj_char = ( self.relative_angle_between_characters( char, visible_obj ) - char.get_param('orientation').value ) % (2*math.pi)
+                            left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
+                            right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
+                            #print(cell_number,neighbor_cell_linked,
+                            #      obj_dist,
+                            #      char.get_param('id'),
+                            #      visible_obj.get_param('id'),
+                            #    char.get_param('eyes').get_param('max_dist'),
+                            #    char.get_param('orientation').value * 180 / math.pi,
+                            #    left_obj_angle * 180 / math.pi,
+                            #    ang_obj_char * 180/math.pi,
+                            #    right_obj_angle * 180/math.pi,
+                            #)
+                            char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
+                            #print()
+                #REMOVE
+                eyes = char.get_param('eyes')
+                this_str = '[ '
+                for i in eyes.left['food source']:
+                    this_str+=str(i)+", "
+                this_str += ']\n['
+                for i in eyes.right['food source']:
+                    this_str+=str(i)+", "
+                this_str += ']'
+                print(this_str)
+
     def iterate_characters(self):
         self.update_age_by_cell()
         self.update_energy_by_cell()
-        # Eat
-        self.update_position_by_cell()
+        self.update_position_by_cell() #Feeds if collides with food source
+        self.update_vision_by_cell()
         # Perception step
         # Update direction
         # Spawn step
@@ -218,15 +357,16 @@ class SimulationBox:
                 s = (now-start_time).total_seconds()
                 hours, remainder = divmod(s, 3600)
                 minutes, seconds = divmod(remainder, 60)
-                print(
-                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
-                        self.current_step,
-                        (now-prev_time).total_seconds(),
-                        int(hours),
-                        int(minutes),
-                        seconds
-                    )
-                )
+                ###############
+                #print(
+                #    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
+                #        self.current_step,
+                #        (now-prev_time).total_seconds(),
+                #        int(hours),
+                #        int(minutes),
+                #        seconds
+                #    )
+                #)
                 prev_time=now
 
             self.current_step = i + 1

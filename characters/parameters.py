@@ -1,5 +1,6 @@
 import random
 import math
+import numpy as np
 import sys
 import os
 
@@ -115,7 +116,7 @@ class Speed(CharacterParameter):
                 self.value + acceleration
             )
         )
-    
+
 class Energy(CharacterParameter):
     def __init__(
         self,
@@ -156,3 +157,106 @@ class Energy(CharacterParameter):
                 self.time_delta * time_step
             )
         )
+
+class VisionObj:
+    def __init__(
+        self,
+        offset_angle, # How far angular from orientation the eyes placed,
+        eye_fov,
+        max_sight_dist,
+        n_rays,
+        objs_to_see = [
+            'food source',
+            'prey',
+        ],
+    ):
+        self.n_rays = n_rays
+        self.max_dist = max_sight_dist
+        self.offset_angle = offset_angle
+        self.fov = eye_fov
+
+        self.left  = {}
+        self.right = {}
+        self.possible_objects = objs_to_see
+        for obj in self.possible_objects:
+            self.left[obj] = np.zeros(self.n_rays)
+            self.right[obj] = np.zeros(self.n_rays)
+
+        self.ray_width = self.fov / self.n_rays
+        left_min = self.offset_angle + self.fov / 2. - self.ray_width / 2.
+
+        self.left_ray_angles = np.zeros(self.n_rays)
+        for i in range(0,self.n_rays):
+            self.left_ray_angles[i] = -self.ray_width*i+left_min
+
+        self.right_ray_angles = np.zeros(self.n_rays)
+        for i in range(0,self.n_rays):
+            #self.right_ray_angles[i] = (-self.left_ray_angles[self.n_rays-i-1]) % (2*math.pi)
+            self.right_ray_angles[i] = (-self.left_ray_angles[i]) % (2*math.pi)
+        self.right_ray_angles = self.right_ray_angles[::-1]
+
+    def eye_rays(self):
+        for lr in [self.left_ray_angles,self.right_ray_angles]:
+            for i in range(0,lr.shape[0]):
+                yield (lr[i] + self.ray_width/2., lr[i], lr[i] - self.ray_width/2. )
+
+    def reset_vision(self,val=0.0):
+        for lr in [self.left,self.right]:
+            for key in lr:
+                for i in range(0,lr[key].shape[0]):
+                    lr[key][i]=val
+
+    def place_in_vision(self,obj_type,dist,left_angle,right_angle,max_dist = 10):
+        vision_dist = 0
+        if ( abs(dist) < 1e(-max_dist) ):
+            vision_dist = max_dist
+        else:
+            vision_dist = min(max_dist,np.log10(self.max_dist/dist))
+
+        #print("vis_dist: ",vision_dist)
+        #
+        #for l,m,r in self.eye_rays():
+        #    print("Rays: ",l*180/math.pi,m*180/math.pi,r*180/math.pi)
+
+
+        for lr, init_bit_center, direction in [
+            (self.left ,self.left_ray_angles[0],1),
+            (self.right,self.right_ray_angles[0],-1)
+        ]:
+            step = self.ray_width * direction
+            base = init_bit_center + direction * step / 2.
+            #print("base step",base*180/math.pi,step*180/math.pi)
+
+            left_bin  = ( left_angle-base) / step
+            right_bin = (right_angle-base) / step
+
+            leftmost_bin  = self.n_rays
+            rightmost_bin = -1
+            #print("left rightmost: ", leftmost_bin,rightmost_bin)
+            #print("left right angle",left_angle*180/math.pi,right_angle*180/math.pi)
+            #print("left right bin",left_bin,right_bin)
+            # Locate edges of bins
+            for x_bin in [int(left_bin),int(right_bin)]:
+                if (x_bin < leftmost_bin):
+                    leftmost_bin = int(x_bin)
+                if (x_bin > rightmost_bin):
+                    rightmost_bin = int(x_bin)
+            #print("leftmost rightmost left right",leftmost_bin,rightmost_bin,int(left_bin),int(right_bin))
+
+            # Possible no ray directly in bin, but object crosses bin
+            if (
+                ( leftmost_bin < self.n_rays) and
+                (rightmost_bin >= 0 )
+            ):
+                for this_bin in range(leftmost_bin,rightmost_bin+1):
+                    if ((this_bin>=0) and (this_bin<self.n_rays)):
+                        if (lr[obj_type][this_bin] < vision_dist):
+                            lr[obj_type][this_bin] = vision_dist
+                        
+
+    def list_params(self):
+        return self.__dict__.keys()
+
+    def get_param(self,name):
+        assert (name in self.list_params())
+        return self.__dict__[name]

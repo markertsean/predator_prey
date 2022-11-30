@@ -31,6 +31,7 @@ class Character:
         self.x    = x_init
         self.y    = y_init
         self.size = size
+        self.radius = self.size/2.
         self.name = Character.name
 
         assert isinstance(speed,parameters.Speed)
@@ -39,7 +40,7 @@ class Character:
         if (orientation is None):
             self.orientation = parameters.Orientation(value=2*math.pi*random.random())
         elif (isinstance(orientation,float)):
-            self.orientation = parameters.parameters.Orientation()
+            self.orientation = parameters.Orientation(value=orientation)
         elif (isinstance(orientation,parameters.Orientation)):
             self.orientation = parameters.Orientation
         else:
@@ -47,6 +48,8 @@ class Character:
 
         assert isinstance(parent,int)
         self.parent = parent
+
+        self.consumed=False
 
         self.__setup__(input_parameters)
 
@@ -145,11 +148,14 @@ class Character:
         self.energy.update(time_step,self.speed.value)
         return True
 
+    def eat(self):
+        pass
+
     def percieve(self):
         pass
 
     def spawn(self):
-        pass
+        return False
 
 
 class FoodSource(Character):
@@ -170,13 +176,9 @@ class FoodSource(Character):
         self.x    = x_init
         self.y    = y_init
         self.size = size
+        self.radius = self.size/2.
         self.name = 'food source'
-
-    #def get_speed(self):
-    #    return 0.0
-    #
-    #def get_orientation(self):
-    #    return 0.0
+        self.consumed=False
 
     def get_name(self):
         return self.name
@@ -185,10 +187,14 @@ class Prey(Character):
     def get_name(self):
         return 'prey'
 
+    def check_param(self,key,param):
+        return (key in param) and param[key]
+
     def __setup__(self,params):
         self.collision=True
+        self.consumed=True
 
-        if (params['prey_age']):
+        if (self.check_param('prey_age',params)):
             self.age = parameters.CharacterParameter(
                 name='age',
                 minval=0.0,
@@ -198,7 +204,7 @@ class Prey(Character):
         else:
             self.age = None
 
-        if (params['prey_energy']):
+        if (self.check_param('prey_energy',params)):
             self.energy = parameters.Energy(
                 minval                 = 0.0,
                 maxval                 = params['prey_energy_max'],
@@ -208,3 +214,45 @@ class Prey(Character):
             )
         else:
             self.energy = None
+
+        if (self.check_param('prey_needs_food',params)):
+            self.eats = True
+            self.food_source = 'food source'
+        else:
+            self.eats = False
+
+        if (self.check_param('prey_vision',params)):
+            self.vision = True
+            self.eyes = parameters.VisionObj(
+                params['prey_eye_offset'],
+                params['prey_eye_fov'],
+                params['prey_eye_dist'],
+                params['prey_eye_rays']
+            )
+        else:
+            self.vision=False
+
+        
+        #assert not(params['prey_spawns_fixed'] and params['prey_spawns_proba'])
+        #if (params['prey_spawns_fixed'] or params['prey_spawns_proba']):
+        #    self.reproduces = True
+        #    self.new_spawn_delay    = params['prey_new_spawn_delay']
+        #    self.spawn_energy_min   = params['prey_spawn_energy_min']
+        #    self.spawn_energy_delta = params['prey_spawn_energy_delta']
+        #
+        #    if (params['prey_spawns_fixed']):
+        #        self.fixed_repro_time = params['prey_spawn_time_fixed']
+        #        self.proba_repro_time = -1
+        #    else:
+        #        self.proba_repro_time = params['prey_spawn_prob_sec']
+        #        self.fixed_repro_time = -1
+        #else:
+        #    self.reproduces = False
+
+    def eat(self):
+        self.energy.value = self.energy.get_param('max')
+
+    def spawn(self,time):
+        return False
+        #if (not self.reproduces):
+        #    return False

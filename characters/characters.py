@@ -6,6 +6,7 @@ import os
 sys.path.append('/'.join( __file__.split('/')[:-2] )+'/')
 
 import characters.parameters as parameters
+import perceptron.neural_net as NN
 
 class Character:
     id_num = 0
@@ -194,6 +195,8 @@ class Prey(Character):
         self.collision=True
         self.consumed=True
 
+        brain_param_dict = {}
+
         if (self.check_param('prey_age',params)):
             self.age = parameters.CharacterParameter(
                 name='age',
@@ -201,6 +204,7 @@ class Prey(Character):
                 maxval=params['prey_age_max'],
                 value =0.0,
             )
+            brain_param_dict['age'] = self.age.get_value
         else:
             self.age = None
 
@@ -212,6 +216,7 @@ class Prey(Character):
                 energy_speed_decrement = params['prey_energy_speed_delta'],
                 energy_time_decrement  = params['prey_energy_time_delta'],
             )
+            brain_param_dict['energy'] = self.energy.get_value
         else:
             self.energy = None
 
@@ -229,25 +234,32 @@ class Prey(Character):
                 params['prey_eye_dist'],
                 params['prey_eye_rays']
             )
+
+            for obj in self.eyes.get_param("possible_objects"):
+                obj_name = '_'.join(obj.split(' '))
+
+                for i in range(0,self.eyes.get_param('n_rays')):
+                    brain_param_dict[ 'left_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_left_eye_value ,obj, i)
+                
+                for i in range(0,self.eyes.get_param('n_rays')):
+                    brain_param_dict['right_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_right_eye_value,obj, i)
         else:
             self.vision=False
 
-        
-        #assert not(params['prey_spawns_fixed'] and params['prey_spawns_proba'])
-        #if (params['prey_spawns_fixed'] or params['prey_spawns_proba']):
-        #    self.reproduces = True
-        #    self.new_spawn_delay    = params['prey_new_spawn_delay']
-        #    self.spawn_energy_min   = params['prey_spawn_energy_min']
-        #    self.spawn_energy_delta = params['prey_spawn_energy_delta']
-        #
-        #    if (params['prey_spawns_fixed']):
-        #        self.fixed_repro_time = params['prey_spawn_time_fixed']
-        #        self.proba_repro_time = -1
-        #    else:
-        #        self.proba_repro_time = params['prey_spawn_prob_sec']
-        #        self.fixed_repro_time = -1
-        #else:
-        #    self.reproduces = False
+        if (self.check_param('prey_brain',params)):
+            self.interprets = True
+            self.brain_param_dict = brain_param_dict
+            self.brain_order = self.brain_param_dict.keys()
+
+            self.brain = NN.NeuralNetwork(
+                n_inputs_init        = len(self.brain_order),
+                layer_sizes          = params['prey_brain_layers'],
+                weights              = params['prey_brain_weights'],
+                biases               = params['prey_brain_biases'],
+                activation_functions = params['prey_brain_AF'],
+            )
+        else:
+            self.interprets = False
 
     def eat(self):
         self.energy.value = self.energy.get_param('max')
@@ -256,3 +268,27 @@ class Prey(Character):
         return False
         #if (not self.reproduces):
         #    return False
+
+    def act(self,timestep):
+        orientation_change, speed_change = self.interpret_input()
+        #TODO: need to have resistance, consider momentum
+        self.orientation.update(orientation_change*timestep)
+        self.speed.update(speed_change*timestep)
+
+    def interpret_input(self):
+        if (not self.interprets):
+            return None
+
+        input_list = []
+        for key in self.brain_order:
+            var_name = key
+            value = 0
+            if ( isinstance(self.brain_param_dict[key], tuple ) ):
+                func, name, i = self.brain_param_dict[key]
+                value = func(name,i)
+            else:
+                value = self.brain_param_dict[key]()
+
+            input_list.append( value )
+
+        return self.brain.calc(input_list)

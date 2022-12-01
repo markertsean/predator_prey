@@ -9,6 +9,7 @@ sys.path.append(os.getcwd() + '/')
 import simulator.simulator as simulator
 import characters.characters as characters
 import characters.parameters as parameters
+import perceptron.activation as AF
 
 def initialize_characters_homogenous_isotropic(initialize_dict,inp_box,char_dict):
     for key in initialize_dict:
@@ -48,13 +49,13 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':  1e2 ,
-        'time_step':  1e-1,
+        'max_steps':  1e3 ,
+        'time_step':  1e-2,
         'box_size':   1e0,
-        'cell_size':  1.,#1e-1,
+        'cell_size':  1e-1,
         'seed': 43,
         'abs_max_speed': 1e-1,
-        'snapshot_step': 1,
+        'snapshot_step': 1e1,
         
     }
 
@@ -65,10 +66,10 @@ def main():
         'n_prey': 5,
         'prey_size':  1e-2,
 
-        'prey_age': False,
+        'prey_age': True,
         'prey_age_max':10.0,
 
-        'prey_energy': False,
+        'prey_energy': True,
         'prey_energy_max':1.0,
         'prey_energy_speed_delta':0.25, # Per second at max speed
         'prey_energy_time_delta':0.25, # Per second
@@ -83,6 +84,12 @@ def main():
         'prey_eye_dist': 0.5,#1e-1,
         'prey_eye_rays': 5,
 
+        'prey_brain': True,
+        'prey_brain_layers':[2],
+        'prey_brain_weights':None,
+        'prey_brain_biases':None,
+        'prey_brain_AF':[AF.tanh],
+
         'prey_spawns_fixed': False,
         'prey_spawn_time_fixed': 1.0,
         'prey_spawns_proba': False,
@@ -91,7 +98,6 @@ def main():
         'prey_new_spawn_delay': 1.0,
         'prey_spawn_energy_min': 0.5,
         'prey_spawn_energy_delta': 0.1,
-
     }
 
     box = simulator.SimulationBox(
@@ -119,6 +125,7 @@ def main():
         character_parameters['prey_size'],
         characters.Prey
     )
+    
     initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
     box.run_simulation()

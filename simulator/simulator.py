@@ -121,12 +121,12 @@ class SimulationBox:
     def convert_cell_2D_to_1D(self,x_cell,y_cell):
         return self.n_cells * y_cell + x_cell
 
-    # [[0 1][2 3]]
+    # [[1 3][0 2]]
     def get_cell_1D(self,x,y):
         x_cell, y_cell = self.get_cell_2D(x,y)
         return self.convert_cell_2D_to_1D( x_cell, y_cell )
 
-    # [[0,0 1,0][0,1 1,1]]
+    # [[0,1 1,1][0,0 1,0]]
     def get_cell_2D(self,x,y):
         x_cell = int(x / self.length * self.n_cells)
         y_cell = int(y / self.length * self.n_cells)
@@ -314,13 +314,22 @@ class SimulationBox:
                             right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
                             char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
 
+    def update_action_by_cell(self):
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            for char in cell:
+                if (
+                    ('interprets' in char.list_params()) and
+                    char.get_param('interprets')
+                ):
+                    char.act(self.time_step)
+
     def iterate_characters(self):
         self.update_age_by_cell()
         self.update_energy_by_cell()
         self.update_position_by_cell() #Feeds if collides with food source
         self.update_vision_by_cell()
-        # Perception step
-        # Update direction
+        self.update_action_by_cell() # Update direction, speed
         # Spawn step
 
     def generate_snapshots(self):
@@ -331,7 +340,10 @@ class SimulationBox:
         with open(output_path+output_fn,'wb') as f:
             for key in sorted(self.cell_dict.keys()):
                 for c in self.cell_dict[key]:
-                    pkl.dump(c,f)
+                    try:
+                        pkl.dump(c,f)
+                    except:
+                        pass
 
         output_fn = 'simple_snapshot_{:09d}.pkl'.format(self.current_step)
         with open(output_path+output_fn,'wb') as f:

@@ -47,6 +47,9 @@ class CharacterParameter:
     def value(self):
         return self.value
 
+    def get_value(self):
+        return self.value
+
     def set_param(self,name,value):
         assert name in self.__dict__
         self.__dict__[name] = value
@@ -191,7 +194,6 @@ class VisionObj:
 
         self.right_ray_angles = np.zeros(self.n_rays)
         for i in range(0,self.n_rays):
-            #self.right_ray_angles[i] = (-self.left_ray_angles[self.n_rays-i-1]) % (2*math.pi)
             self.right_ray_angles[i] = (-self.left_ray_angles[i]) % (2*math.pi)
         self.right_ray_angles = self.right_ray_angles[::-1]
 
@@ -249,3 +251,15 @@ class VisionObj:
     def get_param(self,name):
         assert (name in self.list_params())
         return self.__dict__[name]
+
+    def get_left_eye_values(self,name):
+        return self.left[name]
+
+    def get_right_eye_values(self,name):
+        return self.right[name]
+
+    def get_left_eye_value(self,name,ray):
+        return self.left[name][ray]
+
+    def get_right_eye_value(self,name,ray):
+        return self.right[name][ray]

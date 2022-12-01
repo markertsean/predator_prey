@@ -246,7 +246,8 @@ class NeuralNetwork:
 
     def calc(self,x):
         x_iter = x
+        i = 0
         for layer in self.layer_list:
-            print(x_iter)
+            i = i+1
             x_iter = layer.calc(x_iter)
         return x_iter

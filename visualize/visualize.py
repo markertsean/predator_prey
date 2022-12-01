@@ -10,15 +10,18 @@ def read_setup(input_path):
     with open(input_path+"setup.log",'r') as f:
         for line in f:
             l = line.replace('\n','').split(':')
-            if (l[1]=='False'):
-                l[1]=0
-            elif (l[1]=='True'):
-                l[1]=1
-            else:
-                numeric = any([x.isdigit() for x in l[1]])
-                if numeric:
-                    l[1]=float(l[1])
-            output_dict[l[0]] = l[1]
+            try:
+                if (l[1]=='False'):
+                    l[1]=0
+                elif (l[1]=='True'):
+                    l[1]=1
+                else:
+                    numeric = any([x.isdigit() for x in l[1]])
+                    if numeric:
+                        l[1]=float(l[1])
+                output_dict[l[0]] = l[1]
+            except:
+                pass
     return output_dict
 
 def load_multi_pickle(filename):
@@ -87,7 +90,7 @@ def plot_express(inp_df,setup_params):
     )
     fig.update_xaxes(tick0=cell_size, dtick=cell_size)
     fig.update_yaxes(tick0=cell_size, dtick=cell_size)
-    fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000*setup_params['time_step']
+    fig.layout.updatemenus[0].buttons[0].args[1]["frame"]["duration"] = 1000*setup_params['time_step'] * setup_params['snapshot_step']
     fig.show()
 
 def plot_go(inp_df,setup_params):

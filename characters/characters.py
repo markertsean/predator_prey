@@ -84,6 +84,38 @@ class Character:
         out_str += 30*'-'+'\n'
         return out_str
 
+    def __additional_equal__(self,other):
+        return True
+
+    def __eq__(self,other):
+        for param in [
+                'name',
+                'collision',
+                'x',
+                'y',
+                'speed',
+                'size',
+                'radius',
+                'orientation',
+        ]:
+            print(param)
+            if (
+                (param in  self.list_params()) !=
+                (param in other.list_params())
+            ):
+                return False
+            print(param)
+            if (
+                (param in  self.list_params()) and
+                (param in other.list_params())
+            ):
+                if ( self.get_param(param)!= other.get_param(param) ):
+                    return False
+        if (not self.__additional_equal__(other)):
+            return False
+        return True
+
+
     def update_pos(self,x,y):
         self.x = x
         self.y = y
@@ -205,6 +237,7 @@ class Prey(Character):
         brain_param_dict = {}
 
         if (self.check_param('prey_age',params)):
+            self.has_age=True
             self.age = parameters.CharacterParameter(
                 name='age',
                 minval=0.0,
@@ -213,9 +246,11 @@ class Prey(Character):
             )
             brain_param_dict['age'] = self.age.get_value
         else:
+            self.has_age=False
             self.age = None
 
         if (self.check_param('prey_energy',params)):
+            self.has_energy=True
             self.energy = parameters.Energy(
                 minval                 = 0.0,
                 maxval                 = params['prey_energy_max'],
@@ -225,6 +260,7 @@ class Prey(Character):
             )
             brain_param_dict['energy'] = self.energy.get_value
         else:
+            self.has_energy=False
             self.energy = None
 
         if (self.check_param('prey_needs_food',params)):
@@ -247,7 +283,7 @@ class Prey(Character):
 
                 for i in range(0,self.eyes.get_param('n_rays')):
                     brain_param_dict[ 'left_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_left_eye_value ,obj, i)
-                
+
                 for i in range(0,self.eyes.get_param('n_rays')):
                     brain_param_dict['right_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_right_eye_value,obj, i)
         else:
@@ -281,6 +317,34 @@ class Prey(Character):
             self.spawn_fixed_time_min = params['prey_spawn_time_fixed']
         else:
             self.reproduces = False
+
+    def __additional_equal__(self,other):
+        if(
+            (self.has_age != other.has_age) or
+            (self.has_age and (self.age != other.age))
+        ):
+            return False
+        if(
+            (self.has_energy != other.has_energy) or
+            (self.has_energy and (self.energy != other.energy))
+        ):
+            return False
+        if(
+            (self.eats != other.eats) or
+            (self.eats and (self.food_source != other.food_source))
+        ):
+            return False
+        if(
+            (self.vision != other.vision) or
+            (self.vision and (self.eyes != other.eyes))
+        ):
+            return False
+        if(
+            (self.interprets != other.interprets) or
+            (self.interprets and (self.brain != other.brain))
+        ):
+            return False
+        return True
 
     def eat(self):
         self.energy.value = self.energy.get_param('max')
@@ -358,7 +422,8 @@ class Prey(Character):
         return True
 
     def spawn(self,x,y,mutation_rate = None):
-
+        if (not self.reproduces):
+            return None
         self.energy.decrease(abs(self.spawn_energy_delta))
         self.spawn_last_t = 0.0
 
@@ -367,13 +432,14 @@ class Prey(Character):
             y,
             self.size,
             parameters.Speed(
-                0.0,
+                self.speed.get_param('max'),
                 self.speed.get_param('max'),
                 0.0,
             ),
             parent = self.id,
             input_parameters = self.input_parameters
         )
+        child.eat()
 
         parent_brain = self.get_param('brain')
         if (mutation_rate is None):

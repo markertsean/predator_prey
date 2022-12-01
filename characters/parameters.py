@@ -41,6 +41,9 @@ class CharacterParameter:
                 out_str += "\t"+key+":\t"+str(this_dict[key])+"\n"
         return out_str
 
+    def __eq__(self,other):
+        return self.value == other.value
+
     def get_param(self,name):
         return self.__dict__[name]
 
@@ -201,6 +204,33 @@ class VisionObj:
         for i in range(0,self.n_rays):
             self.right_ray_angles[i] = (-self.left_ray_angles[i]) % (2*math.pi)
         self.right_ray_angles = self.right_ray_angles[::-1]
+
+    def __eq__(self,other):
+        is_equal = (
+            (self.n_rays       == other.n_rays      ) and
+            (self.max_dist     == other.max_dist    ) and
+            (self.offset_angle == other.offset_angle) and
+            (self.fov          == other.fov         ) and
+            (self.ray_width    == other.ray_width   )
+        )
+        if (not is_equal):
+            return False
+        for s, o in zip(self.left_ray_angles,other.left_ray_angles):
+            if ( s != o ):
+                return False
+        for s, o in zip(self.right_ray_angles,other.right_ray_angles):
+            if ( s != o ):
+                return False
+        if (self.possible_objects!=other.possible_objects):
+            return False
+        for obj in self.possible_objects:
+            for s,o in zip(self.right[obj],other.right[obj]):
+                if (s!=o):
+                    return False
+            for s,o in zip(self.left[obj],other.left[obj]):
+                if (s!=o):
+                    return False
+        return True
 
     def eye_rays(self):
         for lr in [self.left_ray_angles,self.right_ray_angles]:

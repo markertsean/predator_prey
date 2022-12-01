@@ -41,6 +41,18 @@ class Neuron:
             tabs,self.weights,
         )
 
+    def __eq__(self,other):
+        if (
+            (self.n_inputs!=other.n_inputs) or
+            (self.bias    !=other.bias    ) or
+            (self.af      !=other.af      )
+        ):
+            return False
+        for s, o in zip(self.weights,other.weights):
+            if (s != o):
+                return False
+        return True
+
     def check_numeric(x):
         assert isinstance(x,(float,int))
 
@@ -162,6 +174,17 @@ class Layer:
             out_str = out_str + neuron.__str__(n_indent+1)
         return out_str
 
+    def __eq__(self,other):
+        if (
+            (self.n_inputs   != other.n_inputs  ) or
+            (self.layer_size != other.layer_size)
+        ):
+            return False
+        for s_node, o_node in zip(self.neuron_list,other.neuron_list):
+            if (s_node != o_node):
+                return False
+        return True
+
     def get_layer_size(self):
         return self.layer_size
 
@@ -262,6 +285,16 @@ class NeuralNetwork:
         for layer in self.layer_list:
             out_str = out_str + layer.__str__(n_indent+1)
         return out_str
+
+    def __eq__(self,other):
+        if ( self.n_inputs   != other.n_inputs ):
+            return False
+        if ( len(self.layer_sizes) != len(other.layer_sizes) ):
+            return False
+        for s_layer, o_layer in zip(self.layer_list,other.layer_list):
+            if (s_layer != o_layer):
+                return False
+        return True
 
     def get_n_inputs(self):
         return self.n_inputs

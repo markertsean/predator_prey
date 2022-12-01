@@ -23,6 +23,7 @@ class SimulationBox:
         max_characters,
         seed,
         output_path = __project_path__+"data/",
+        kill_early = True
     ):
         assert isinstance(box_size,float) or isinstance(box_size,int)
         self.length = float(box_size)
@@ -58,6 +59,8 @@ class SimulationBox:
         assert isinstance(max_characters,int)
         self.max_characters = max_characters
         self.n_characters = 0
+
+        self.kill_early = kill_early
 
         self.__generate_linked_list__()
 
@@ -232,6 +235,7 @@ class SimulationBox:
         return new_x, new_y, consumed_chars
 
     def update_position_by_cell(self):
+        position_changed = False
         new_position_dict = self.__generate_blank_cell_dict__()
         all_consumed_chars = []
         for cell_number in self.cell_dict:
@@ -248,6 +252,11 @@ class SimulationBox:
                     new_cell = self.get_cell_1D( coll_x, coll_y )
                     new_position_dict[new_cell].append(c)
                     all_consumed_chars += consumed_chars
+                    if (
+                        (coll_x != c.get_param('x')) or
+                        (coll_y != c.get_param('y'))
+                    ):
+                        position_changed |= True
 
         for cell_number in new_position_dict:
             cell = new_position_dict[cell_number]
@@ -258,12 +267,16 @@ class SimulationBox:
             self.cell_dict[cell_number] = cell_w_removed
         self.n_characters -= len(all_consumed_chars)
 
+        return position_changed
+
     def update_age_by_cell(self):
+        age_changed = False
         survived_dict = self.__generate_blank_cell_dict__()
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
                 if ( 'age' in char.list_params() ):
+                    age_changed |= True
                     if ( char.age_character(self.time_step) ):
                         survived_dict[cell_number].append(char)
                     else:
@@ -272,13 +285,16 @@ class SimulationBox:
                     survived_dict[cell_number].append(char)
 
         self.cell_dict = survived_dict
+        return age_changed
 
     def update_energy_by_cell(self):
+        energy_changed = False
         survived_dict = self.__generate_blank_cell_dict__()
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
                 if ( 'energy' in char.list_params() ):
+                    energy_changed |= True
                     if ( char.use_energy(self.time_step) ):
                         survived_dict[cell_number].append(char)
                     else:
@@ -286,6 +302,7 @@ class SimulationBox:
                 else:
                     survived_dict[cell_number].append(char)
         self.cell_dict = survived_dict
+        return energy_changed
 
     def distance_two_points(self,x1,y1,x2,y2):
         return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
@@ -300,6 +317,7 @@ class SimulationBox:
         )
 
     def update_vision_by_cell(self):
+        vision_changed = False
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
@@ -335,8 +353,12 @@ class SimulationBox:
                             left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
                             right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
                             char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
+                            vision_changed |= True
+
+        return vision_changed
 
     def update_action_by_cell(self):
+        action_changed = False
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
@@ -345,8 +367,12 @@ class SimulationBox:
                     char.get_param('interprets')
                 ):
                     char.act(self.time_step)
+                    action_changed |= True
+
+        return action_changed
 
     def spawn_by_cell(self):
+        any_spawned = False
         n_spawn_attempts = 5
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
@@ -406,16 +432,19 @@ class SimulationBox:
                                 #TODO: mutation rate
                                 self.embed( char.spawn( x, y, 0.1 ) )
                                 spawned=True
-
-
+                                any_spawned |= True
+        return any_spawned
 
     def iterate_characters(self):
-        self.update_age_by_cell()
-        self.update_energy_by_cell()
-        self.update_position_by_cell() #Feeds if collides with food source
-        self.update_vision_by_cell()
-        self.update_action_by_cell() # Update direction, speed
-        self.spawn_by_cell()
+        something_changed = False
+        something_changed |= self.update_age_by_cell()
+        something_changed |= self.update_energy_by_cell()
+        something_changed |= self.update_position_by_cell() #Feeds if collides with food source
+        something_changed |= self.update_vision_by_cell()
+        something_changed |= self.update_action_by_cell() # Update direction, speed
+        something_changed |= self.spawn_by_cell()
+
+        return something_changed
 
     def generate_snapshots(self):
         output_path = self.output_path + 'character_snapshots/'
@@ -464,15 +493,32 @@ class SimulationBox:
                     f.write(out_str)
 
     def iterate_step(self):
-        self.iterate_characters()
+        something_changed = self.iterate_characters()
         if (self.current_step % self.snapshot_step == 0 ):
             self.generate_snapshots()
+        return something_changed
+
+    def check_for_change(self,prev_cells):
+        # Cycle through cells, if no difference, stop early
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            if ( len(cell) != len(prev_cells[cell_number]) ):
+                return True
+
+            for char in cell:
+                if (char not in prev_cells[cell_number]):
+                    return True
+
+            for char in prev_cells[cell_number]:
+                if (char not in cell):
+                    return True
+        return False
 
     def run_simulation(self):
         start_time = datetime.now()
         prev_time = start_time
         for i in range(0,self.n_steps):
-            self.iterate_step()
+            something_changed = self.iterate_step()
 
             if (self.current_step % self.snapshot_step == 0 ):
                 now = datetime.now()
@@ -489,5 +535,8 @@ class SimulationBox:
                     )
                 )
                 prev_time=now
+
+            if (self.kill_early and (not something_changed)):
+                break
 
             self.current_step = i + 1

@@ -57,7 +57,8 @@ def main():
         'seed':               43,
         'abs_max_speed':      1e-1,
         'snapshot_step':  int(1e1),
-        'max_characters': int(1e0),
+        'max_characters': int(1e2),
+        'kill_no_diff':       True,
     }
 
     character_parameters = {
@@ -91,14 +92,14 @@ def main():
         'prey_brain_biases':None,
         'prey_brain_AF':[AF.tanh],
 
-        'prey_spawns_fixed': False,
+        'prey_spawns_fixed': True,
         'prey_spawn_time_fixed': 1.0,
         'prey_spawns_proba': False,
         'prey_spawn_prob_sec': 'food source',
 
         'prey_new_spawn_delay': 1.0,
         'prey_spawn_energy_min': 0.5,
-        'prey_spawn_energy_delta': 0.3,
+        'prey_spawn_energy_delta': 0.1,
     }
 
     box = simulator.SimulationBox(
@@ -110,6 +111,7 @@ def main():
         simulation_parameters['snapshot_step'],
         simulation_parameters['max_characters'],
         simulation_parameters['seed'],
+        kill_early = simulation_parameters['kill_no_diff'],
     )
 
     save_setup_logfile( simulation_parameters, character_parameters, box )

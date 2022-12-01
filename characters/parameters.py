@@ -160,6 +160,11 @@ class Energy(CharacterParameter):
                 self.time_delta * time_step
             )
         )
+    def decrease(
+        self,
+        x,
+    ):
+        self.value -= x
 
 class VisionObj:
     def __init__(
@@ -243,7 +248,7 @@ class VisionObj:
                     if ((this_bin>=0) and (this_bin<self.n_rays)):
                         if (lr[obj_type][this_bin] < vision_dist):
                             lr[obj_type][this_bin] = vision_dist
-                        
+
 
     def list_params(self):
         return self.__dict__.keys()

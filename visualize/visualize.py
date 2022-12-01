@@ -81,7 +81,7 @@ def plot_express(inp_df,setup_params):
         animation_group='id',
         color='name',
         hover_name='id',
-        hover_data=['speed','orientation','age','energy',],
+        hover_data=['speed','orientation','age','energy'],
         log_x=False,
         size='size',
         size_max=55,

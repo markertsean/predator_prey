@@ -20,6 +20,7 @@ class SimulationBox:
         time_step,
         max_speed,
         snapshot_step,
+        max_characters,
         seed,
         output_path = __project_path__+"data/",
     ):
@@ -53,6 +54,10 @@ class SimulationBox:
         self.output_path = output_path + datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
 
         self.cell_dict = self.__generate_blank_cell_dict__()
+
+        assert isinstance(max_characters,int)
+        self.max_characters = max_characters
+        self.n_characters = 0
 
         self.__generate_linked_list__()
 
@@ -135,15 +140,21 @@ class SimulationBox:
     def get_boundary_offset(self,cell_number,i_tracker):
         return self.boundary_offset_list[cell_number][i_tracker]
 
+    def box_is_full(self):
+        return self.n_characters >= self.max_characters
+
     def embed(self,inp_char):
         assert isinstance(inp_char,characters.Character) or issubclass(inp_char,characters.Character)
+        if (self.box_is_full()):
+            return
         x, y = inp_char.get_pos()
         cell_index = self.get_cell_1D( x, y )
         self.cell_dict[cell_index].append(inp_char)
+        self.n_characters += 1
 
     def update_solo_position(self,character):
         x, y = character.get_pos()
-        s = character.get_speed()
+        s = character.get_speed() * self.time_step
         theta = character.get_orientation()
         new_x = ( x + s * np.cos(theta) ) % self.length
         new_y = ( y + s * np.sin(theta) ) % self.length
@@ -197,9 +208,14 @@ class SimulationBox:
                         inp_char.get_param('collision') and
                         character.get_param('collision')
                     ):
-                        inp_char.speed.value = (
-                            inp_char.get_param('radius') +
-                            character.get_param('radius')
+                        #TODO: this is broken
+                        inp_char.speed.value =  self.distance_two_circles(
+                            character.get_param('x') + x_offset,
+                            character.get_param('y') + y_offset,
+                            character.get_param('radius'),
+                            inp_char.get_param('x'),
+                            inp_char.get_param('y'),
+                            inp_char.get_param('radius')
                         ) / self.time_step
                         new_x, new_y = self.update_solo_position(inp_char)
 
@@ -240,17 +256,21 @@ class SimulationBox:
                 if ( character.get_param('id') not in all_consumed_chars ):
                     cell_w_removed.append(character)
             self.cell_dict[cell_number] = cell_w_removed
+        self.n_characters -= len(all_consumed_chars)
 
     def update_age_by_cell(self):
         survived_dict = self.__generate_blank_cell_dict__()
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
-                if (
-                    (not ('age' in char.list_params())) or
-                    char.age_character(self.time_step)
-                ):
+                if ( 'age' in char.list_params() ):
+                    if ( char.age_character(self.time_step) ):
+                        survived_dict[cell_number].append(char)
+                    else:
+                        self.n_characters -= 1
+                else:
                     survived_dict[cell_number].append(char)
+
         self.cell_dict = survived_dict
 
     def update_energy_by_cell(self):
@@ -258,10 +278,12 @@ class SimulationBox:
         for cell_number in self.cell_dict:
             cell = self.cell_dict[cell_number]
             for char in cell:
-                if (
-                    (not ('energy' in char.list_params())) or
-                    char.use_energy(self.time_step)
-                ):
+                if ( 'energy' in char.list_params() ):
+                    if ( char.use_energy(self.time_step) ):
+                        survived_dict[cell_number].append(char)
+                    else:
+                        self.n_characters -= 1
+                else:
                     survived_dict[cell_number].append(char)
         self.cell_dict = survived_dict
 
@@ -324,13 +346,76 @@ class SimulationBox:
                 ):
                     char.act(self.time_step)
 
+    def spawn_by_cell(self):
+        n_spawn_attempts = 5
+        for cell_number in self.cell_dict:
+            cell = self.cell_dict[cell_number]
+            for char in cell:
+                if self.box_is_full():
+                    continue
+                if (
+                    ('reproduces' in char.list_params()) and
+                    char.get_param('reproduces') and
+                    char.can_spawn(self.time_step)
+                ):
+                    spawned = False
+                    # Try to spawn behind, to avoid collisions
+                    init_orientation = ( char.get_orientation() + math.pi ) % (2*math.pi)
+                    # Attempt to spawn 10 times, checking for collision
+                    for i in range(0,n_spawn_attempts):
+                        if spawned:
+                            break
+                        for sign in [-1.,1.]:
+                            if spawned:
+                                break
+                            spawn_angle = ( init_orientation + sign * i / n_spawn_attempts * math.pi / 2. ) % (2*math.pi)
+                            spawn_dist  = 2.1 * char.get_param('radius')
+                            x = ( spawn_dist * math.cos(spawn_angle) ) % self.length
+                            y = ( spawn_dist * math.sin(spawn_angle) ) % self.length
+
+                            child_cell = self.get_cell_1D(x,y)
+
+                            no_collisions = True
+
+                            ll_cell_tracker = 0
+                            for neighbor_cell_linked in self.linked_list[cell_number]:
+
+                                # Offsets due to open box
+                                x_offset, y_offset = self.get_boundary_offset(child_cell,ll_cell_tracker)
+                                ll_cell_tracker += 1
+
+                                for neighbor in self.cell_dict[neighbor_cell_linked]:
+                                    overlap_val = self.overlap(
+                                        neighbor.get_param('x') + x_offset,
+                                        neighbor.get_param('y') + y_offset,
+                                        neighbor.get_param('radius'),
+                                        x,
+                                        y,
+                                        char.get_param('radius')
+                                    )
+
+                                    if (overlap_val!=0):
+                                        no_collisions = False
+                                    if (not no_collisions):
+                                        break
+
+                                if (not no_collisions):
+                                    break
+
+                            if no_collisions:
+                                #TODO: mutation rate
+                                self.embed( char.spawn( x, y, 0.1 ) )
+                                spawned=True
+
+
+
     def iterate_characters(self):
         self.update_age_by_cell()
         self.update_energy_by_cell()
         self.update_position_by_cell() #Feeds if collides with food source
         self.update_vision_by_cell()
         self.update_action_by_cell() # Update direction, speed
-        # Spawn step
+        self.spawn_by_cell()
 
     def generate_snapshots(self):
         output_path = self.output_path + 'character_snapshots/'
@@ -361,7 +446,22 @@ class SimulationBox:
                         'age':c.get_age(),
                     }
                     pkl.dump(out_dict,f)
-
+        #####################
+        with open(output_path+"debug.txt",'a') as f:
+            for key in sorted(self.cell_dict.keys()):
+                for c in self.cell_dict[key]:
+                    out_str = (
+                        'id='+str(c.get_param('id'))+","+
+                        'name='+str(c.get_name())+","+
+                        'x='+str(c.get_param('x'))+","+
+                        'y='+str(c.get_param('y'))+","+
+                        'speed='+str(c.get_speed())+","+
+                        'size='+str(c.get_param('size'))+","+
+                        'orientation='+str(c.get_orientation())+","+
+                        'energy='+str(c.get_energy())+","+
+                        'age='+str(c.get_age())+"\n"
+                    )
+                    f.write(out_str)
 
     def iterate_step(self):
         self.iterate_characters()

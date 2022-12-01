@@ -85,6 +85,9 @@ class Neuron:
     def get_weights(self):
         return self.weights
 
+    def get_activation(self):
+        return self.af
+
     def calc(self,inp_array):
         inp_x = Neuron.set_array(inp_array,self.n_inputs)
         return self.af( float(np.dot(inp_x,self.weights)) + self.bias )
@@ -116,7 +119,7 @@ class Layer:
                 for i in range(0,self.layer_size):
                     bias_list.append( biases )
             else:
-                bias_list = Neuron.set_array( biases, self.n_inputs )
+                bias_list = Neuron.set_array( biases, self.layer_size )
 
         weight_list = []
         if (weights is None):
@@ -167,6 +170,22 @@ class Layer:
 
     def get_neurons(self):
         return self.neuron_list
+
+    def get_biases(self):
+        bias_list = []
+        for neuron in self.neuron_list:
+            bias_list.append(neuron.get_bias())
+        return bias_list
+
+    def get_weights(self):
+        weights_list = []
+        for neuron in self.neuron_list:
+            weights_list.append(neuron.get_weights())
+        return weights_list
+
+    # Activation functions are the same across a layer
+    def get_activation_function(self):
+        return self.neuron_list[0].get_activation()
 
     def calc(self,x):
         y_out = np.zeros(self.layer_size)
@@ -243,6 +262,30 @@ class NeuralNetwork:
         for layer in self.layer_list:
             out_str = out_str + layer.__str__(n_indent+1)
         return out_str
+
+    def get_n_inputs(self):
+        return self.n_inputs
+
+    def get_layer_sizes(self):
+        return self.layer_sizes
+
+    def get_biases(self):
+        bias_list = []
+        for layer in self.layer_list:
+            bias_list.append(layer.get_biases())
+        return bias_list
+
+    def get_weights(self):
+        weights_list = []
+        for layer in self.layer_list:
+            weights_list.append(layer.get_weights())
+        return weights_list
+
+    def get_activation_functions(self):
+        af_list = []
+        for layer in self.layer_list:
+            af_list.append(layer.get_activation_function())
+        return af_list
 
     def calc(self,x):
         x_iter = x

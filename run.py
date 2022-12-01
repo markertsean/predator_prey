@@ -3,6 +3,7 @@ import math
 import numpy as np
 import sys
 import os
+import copy
 
 sys.path.append(os.getcwd() + '/')
 
@@ -49,14 +50,14 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':  1e3 ,
-        'time_step':  1e-2,
-        'box_size':   1e0,
-        'cell_size':  1e-1,
-        'seed': 43,
-        'abs_max_speed': 1e-1,
-        'snapshot_step': 1e1,
-        
+        'max_steps':      int(1e3),
+        'time_step':          1e-2,
+        'box_size':           1e0,
+        'cell_size':          1e-1,
+        'seed':               43,
+        'abs_max_speed':      1e-1,
+        'snapshot_step':  int(1e1),
+        'max_characters': int(1e0),
     }
 
     character_parameters = {
@@ -67,7 +68,7 @@ def main():
         'prey_size':  1e-2,
 
         'prey_age': True,
-        'prey_age_max':10.0,
+        'prey_age_max':5.0,
 
         'prey_energy': True,
         'prey_energy_max':1.0,
@@ -97,7 +98,7 @@ def main():
 
         'prey_new_spawn_delay': 1.0,
         'prey_spawn_energy_min': 0.5,
-        'prey_spawn_energy_delta': 0.1,
+        'prey_spawn_energy_delta': 0.3,
     }
 
     box = simulator.SimulationBox(
@@ -107,6 +108,7 @@ def main():
         simulation_parameters['time_step'],
         simulation_parameters['abs_max_speed'],
         simulation_parameters['snapshot_step'],
+        simulation_parameters['max_characters'],
         simulation_parameters['seed'],
     )
 

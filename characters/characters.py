@@ -2,6 +2,7 @@ import random
 import math
 import sys
 import os
+import copy
 
 sys.path.append('/'.join( __file__.split('/')[:-2] )+'/')
 
@@ -55,7 +56,7 @@ class Character:
         self.__setup__(input_parameters)
 
     def __setup__(self,input_parameters):
-        pass
+        self.input_parameters = input_parameters
 
     def __str__(self):
         this_dict = self.__dict__
@@ -102,6 +103,10 @@ class Character:
     def get_param(self,name):
         assert name in self.__dict__
         return self.__dict__[name]
+
+    def set_param(self,name,value):
+        assert name in self.__dict__
+        self.__dict__[name] = value
 
     def get_name(self):
         return None
@@ -192,6 +197,8 @@ class Prey(Character):
         return (key in param) and param[key]
 
     def __setup__(self,params):
+        self.input_parameters = params
+
         self.collision=True
         self.consumed=True
 
@@ -261,13 +268,22 @@ class Prey(Character):
         else:
             self.interprets = False
 
+        #TODO: implement proba
+        if (self.check_param('prey_spawns_fixed',params) or self.check_param('prey_spawns_proba',params)):
+            self.reproduces   = True
+            self.spawn_last_t = 0.0
+            self.spawn_adult  = False
+            self.spawn_delay        = params['prey_new_spawn_delay']
+            self.spawn_energy_min   = params['prey_spawn_energy_min']
+            self.spawn_energy_delta = params['prey_spawn_energy_delta']
+
+            # Fixed
+            self.spawn_fixed_time_min = params['prey_spawn_time_fixed']
+        else:
+            self.reproduces = False
+
     def eat(self):
         self.energy.value = self.energy.get_param('max')
-
-    def spawn(self,time):
-        return False
-        #if (not self.reproduces):
-        #    return False
 
     def act(self,timestep):
         orientation_change, speed_change = self.interpret_input()
@@ -292,3 +308,96 @@ class Prey(Character):
             input_list.append( value )
 
         return self.brain.calc(input_list)
+
+    def mutated_value(x,mutation_rate):
+        return x * ( 1 + mutation_rate * 2 * ( random.random() - 0.5 ) )
+
+    def mutate_2D_list(weight_bias_list,mutation_rate,allow_const=False):
+        new_list = []
+        for i in range(0,len(weight_bias_list)):
+            new_list.append([])
+            layer = weight_bias_list[0]
+            prev_val = layer[0]
+            all_equal = True
+            if allow_const:
+                for val in layer[1:]:
+                    if (prev_val != val):
+                        all_equal = False
+                        break
+            if allow_const and all_equal:
+                new_bias = Prey.mutated_value(prev_val,mutation_rate)
+                for j in range(0,len(layer)):
+                    new_list[i].append(new_bias)
+            else:
+                for j in range(0,len(layer)):
+                    new_list[i].append(Prey.mutated_value(layer[j],mutation_rate))
+        return new_list
+
+    def can_spawn(self,time):
+        if ( not self.reproduces ):
+            return False
+
+        self.spawn_last_t += time
+
+        # Ensure it has existed long enough first, only has to do this once
+        if (self.spawn_last_t>self.spawn_delay):
+            self.spawn_adult = True
+
+        if (not self.spawn_adult):
+            return False
+
+        # Fixed
+        if (self.spawn_last_t < self.spawn_fixed_time_min):
+            return False
+
+        # Check we have enough energy
+        if (self.energy is not None):
+            if ( self.energy.get_value() < self.spawn_energy_min ):
+                return False
+
+        return True
+
+    def spawn(self,x,y,mutation_rate = None):
+
+        self.energy.decrease(abs(self.spawn_energy_delta))
+        self.spawn_last_t = 0.0
+
+        child = Prey(
+            x,
+            y,
+            self.size,
+            parameters.Speed(
+                0.0,
+                self.speed.get_param('max'),
+                0.0,
+            ),
+            parent = self.id,
+            input_parameters = self.input_parameters
+        )
+
+        parent_brain = self.get_param('brain')
+        if (mutation_rate is None):
+            mutated_brain = parent_brain
+        else:
+            brain_inputs  = parent_brain.get_n_inputs()
+            brain_layers  = parent_brain.get_layer_sizes()
+            brain_weights = parent_brain.get_weights().copy()
+            brain_biases  = parent_brain.get_biases().copy()
+            brain_afs     = parent_brain.get_activation_functions()
+
+            new_brain_biases = Prey.mutate_2D_list(brain_biases,mutation_rate,allow_const=True)
+
+            new_brain_weights = []
+            for layer in brain_weights:
+                new_brain_weights.append(Prey.mutate_2D_list(layer,mutation_rate,allow_const=True))
+
+            mutated_brain = NN.NeuralNetwork(
+                brain_inputs,
+                brain_layers,
+                new_brain_weights,
+                new_brain_biases,
+                brain_afs
+            )
+
+        child.set_param('brain',mutated_brain)
+        return child

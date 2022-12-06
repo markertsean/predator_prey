@@ -35,6 +35,7 @@ class Character:
         self.size = size
         self.radius = self.size/2.
         self.name = Character.name
+        self.generation = 0
 
         assert isinstance(speed,parameters.Speed)
         self.speed = speed
@@ -195,6 +196,8 @@ class Character:
     def spawn(self):
         return False
 
+    def get_pickle_obj(self):
+        return []
 
 class FoodSource(Character):
     def __init__(
@@ -220,6 +223,18 @@ class FoodSource(Character):
 
     def get_name(self):
         return self.name
+
+    def get_pickle_obj(self):
+        return [
+            ('id'       ,self.id       ),
+            ('x'        ,self.x        ),
+            ('y'        ,self.y        ),
+            ('size'     ,self.size     ),
+            ('radius'   ,self.radius   ),
+            ('name'     ,self.name     ),
+            ('consumed' ,self.consumed ),
+            ('collision',self.collision),
+        ]
 
 class Prey(Character):
     def get_name(self):
@@ -268,6 +283,7 @@ class Prey(Character):
             self.food_source = 'food source'
         else:
             self.eats = False
+            self.food_source = None
 
         if (self.check_param('prey_vision',params)):
             self.vision = True
@@ -281,18 +297,28 @@ class Prey(Character):
             for obj in self.eyes.get_param("possible_objects"):
                 obj_name = '_'.join(obj.split(' '))
 
+                raynum = 0
                 for i in range(0,self.eyes.get_param('n_rays')):
-                    brain_param_dict[ 'left_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_left_eye_value ,obj, i)
+                    #brain_param_dict[ 'left_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_left_eye_value ,obj, i)
+                    brain_param_dict['eye_ray_value_'+obj_name+"_"+str(raynum)] = (self.eyes.get_left_eye_value ,obj, i)
+                    raynum += 1
 
                 for i in range(0,self.eyes.get_param('n_rays')):
-                    brain_param_dict['right_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_right_eye_value,obj, i)
+                    #brain_param_dict['right_eye_'+obj_name+"_"+str(i)] = (self.eyes.get_right_eye_value,obj, i)
+                    brain_param_dict['eye_ray_value_'+obj_name+"_"+str(raynum)] = (self.eyes.get_right_eye_value ,obj, i)
+                    raynum += 1
         else:
             self.vision=False
+            self.eyes=None
 
         if (self.check_param('prey_brain',params)):
             self.interprets = True
             self.brain_param_dict = brain_param_dict
             self.brain_order = self.brain_param_dict.keys()
+
+            self.brain_mutation_min  = params['prey_mutation_floor']
+            self.brain_mutation_max  = params['prey_mutation_max']
+            self.brain_mutation_half = params['prey_mutation_halflife']
 
             self.brain = NN.NeuralNetwork(
                 n_inputs_init        = len(self.brain_order),
@@ -303,6 +329,7 @@ class Prey(Character):
             )
         else:
             self.interprets = False
+            self.brain = None
 
         #TODO: implement proba
         if (self.check_param('prey_spawns_fixed',params) or self.check_param('prey_spawns_proba',params)):
@@ -317,6 +344,7 @@ class Prey(Character):
             self.spawn_fixed_time_min = params['prey_spawn_time_fixed']
         else:
             self.reproduces = False
+            self.spawn_last_t = None
 
     def __additional_equal__(self,other):
         if(
@@ -373,6 +401,17 @@ class Prey(Character):
 
         return self.brain.calc(input_list)
 
+    def mutation_rate(self):
+        if ((self.brain_mutation_min is None) or (self.brain_mutation_max is None)):
+            return None
+        return (
+            self.brain_mutation_min +
+            (
+                (self.brain_mutation_max-self.brain_mutation_min) /
+                ( 2**(float(self.generation)/self.brain_mutation_half) )
+            )
+        )
+
     def mutated_value(x,mutation_rate):
         return x * ( 1 + mutation_rate * 2 * ( random.random() - 0.5 ) )
 
@@ -421,7 +460,7 @@ class Prey(Character):
 
         return True
 
-    def spawn(self,x,y,mutation_rate = None):
+    def spawn(self,x,y):
         if (not self.reproduces):
             return None
         self.energy.decrease(abs(self.spawn_energy_delta))
@@ -442,6 +481,7 @@ class Prey(Character):
         child.eat()
 
         parent_brain = self.get_param('brain')
+        mutation_rate = self.mutation_rate()
         if (mutation_rate is None):
             mutated_brain = parent_brain
         else:
@@ -466,4 +506,69 @@ class Prey(Character):
             )
 
         child.set_param('brain',mutated_brain)
+        child.set_param('generation',child.get_param('generation')+1)
         return child
+
+    def get_pickle_obj(self):
+        return_list = [
+            ('id'         ,self.id                ),
+            ('name'       ,self.get_name()        ),
+            ('consumed'   ,self.consumed          ),
+            ('collision'  ,self.collision         ),
+            ('x'          ,self.x                 ),
+            ('y'          ,self.y                 ),
+            ('speed'      ,self.get_speed()       ),
+            ('orientation',self.get_orientation() ),
+            ('size'       ,self.size              ),
+            ('radius'     ,self.radius            ),
+            ('age'        ,self.get_age()         ),
+            ('energy'     ,self.get_energy()      ),
+            ('food'       ,self.food_source       ),
+            ('generation' ,self.generation        ),
+            ('last_spawn' ,self.spawn_last_t      ),
+        ]
+
+        if ( self.eyes is None ):
+            return_list.append( ('eyes',False) )
+        else:
+            return_list.append( ('eyes',True) )
+
+            raynum = 0
+            for rays in [
+                self.eyes.get_param('left_ray_angles'),
+                self.eyes.get_param('right_ray_angles')
+            ]:
+                for ray in rays:
+                    return_list.append((
+                        'eye_ray_angle_'+str(raynum),
+                        ray
+                    ))
+                    raynum += 1
+
+            raynum = 0
+            for obj in self.eyes.get_param("possible_objects"):
+                obj_name = '_'.join(obj.split(' '))
+                for rays in [
+                    self.eyes.get_left_eye_values(obj),
+                    self.eyes.get_right_eye_values(obj)
+                ]:
+                    for ray in rays:
+                        return_list.append((
+                            'eye_ray_value_'+obj_name+"_"+str(raynum),
+                            ray
+                        ))
+                        raynum += 1
+
+
+        if ( self.brain is None ):
+            return_list.append( ('brain',False) )
+        else:
+            return_list.append(('brain'                     ,True                                 ))
+            return_list.append(('brain_inputs'              ,self.brain.get_n_inputs()            ))
+            return_list.append(('brain_layer_sizes'         ,self.brain.get_layer_sizes()         ))
+            return_list.append(('brain_biases'              ,self.brain.get_biases()              ))
+            return_list.append(('brain_weights'             ,self.brain.get_weights()             ))
+            return_list.append(('brain_activation_functions',self.brain.get_activation_functions()))
+            return_list.append(('brain_field_order'         ,list(self.brain_order)               ))
+
+        return return_list

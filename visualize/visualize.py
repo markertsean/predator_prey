@@ -1,9 +1,17 @@
-import plotly.express as px
-import plotly.graph_objects as go
+#import plotly.express as px
+#import plotly.graph_objects as go
+import matplotlib.animation as animation
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import pickle as pkl
 import os
+import sys
+
+sys.path.append('/'.join( os.getcwd().split('/') )+'/')
+
+import characters.characters as characters
+import characters.parameters as parameters
 
 def read_setup(input_path):
     output_dict = {}
@@ -54,6 +62,62 @@ def read_simple(input_path,input_params):
                 out_dict[key].append(this_dict[key])
             out_dict['time'].append(timestep)
     return pd.DataFrame.from_dict(out_dict)
+
+def read_character(input_path,input_params):
+    all_files = os.listdir(input_path)
+    char_files = []
+    for file in all_files:
+        if (file.startswith('character_snapshot_')):
+            char_files.append(file)
+    char_files = sorted(char_files)
+    df_dict = {}
+    static_dict = {}
+    for fn in char_files:
+        snap_str = ''.join(x for x in fn if x.isdigit())
+        snap_int = int(snap_str)
+        timestep = snap_int * input_params['time_step']
+
+        for char in load_multi_pickle(input_path+fn):
+            char_dict = {}
+            for key,value in char:
+                char_dict[key] = value
+                
+            char_name = char_dict['name']
+            if (char_name not in df_dict):
+                df_dict[char_name] = {}
+                df_dict[char_name]['time'] = []
+
+            df_dict[char_name]['time'].append(timestep)
+
+            static_dict[char_dict['id']] = {}
+            for key in char_dict.keys():
+                # Check from good parameters
+                if (
+                    (key in [
+                        'consumed',
+                        'collision',
+                        'size',
+                        'radius',
+                        'food',
+                        'generation',
+                    ]) or
+                    (key.startswith('eye') and ('value' not in key)) or
+                    (key.startswith('brain'))
+                ):
+                    static_dict[char_dict['id']][key] = char_dict[key]
+                    continue
+
+                if (key not in df_dict[char_name]):
+                    df_dict[char_name][key] = []
+
+                df_dict[char_name][key].append(char_dict[key])
+
+    out_df_dict = {}
+    for obj in df_dict.keys():
+        this_dict = df_dict[obj]
+        out_df_dict[obj] = pd.DataFrame(this_dict)
+        
+    return out_df_dict, static_dict
 
 def extend_food_sources(inp_df):
     this_df = inp_df.copy()
@@ -135,12 +199,13 @@ def main():
     input_snap_path = input_base_path + 'character_snapshots/'
 
     setup_params = read_setup(input_base_path)
-    position_df  = read_simple(input_snap_path,setup_params)
+    #position_df  = read_simple(input_snap_path,setup_params)
+    character_df_dict, static_dict  = read_character(input_snap_path,setup_params)
 
     # Food sources extend over boundaries, need to include in plot
-    position_wrapped_food_df = extend_food_sources(position_df)
+    #position_wrapped_food_df = extend_food_sources(position_df)
 
-    plot_express(position_wrapped_food_df,setup_params)
+    #plot_express(position_wrapped_food_df,setup_params)
     #plot_go(position_wrapped_food_df,setup_params)
 
 if __name__ == '__main__':

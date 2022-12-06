@@ -51,39 +51,41 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 def main():
     simulation_parameters = {
         'max_steps':      int(1e3),
-        'time_step':          1e-2,
+        'time_step':          1e-1,
+        'snapshot_step':  int(1e0),
+        
         'box_size':           1e0,
-        'cell_size':          1e-1,
-        'seed':               43,
-        'abs_max_speed':      1e-1,
-        'snapshot_step':  int(1e1),
-        'max_characters': int(1e2),
+        'cell_size':          1e-2,
+        'abs_max_speed':      1e-2,
+
+        'max_characters': int(5e2),
         'kill_no_diff':       True,
+
+        'seed':               None,
     }
 
     character_parameters = {
         'n_food': 10,
-        'food_size': simulation_parameters['box_size']*3e-1,
+        'food_size': simulation_parameters['box_size']*2e-1,
 
-        'n_prey': 5,
-        'prey_size':  1e-2,
+        'n_prey': 50,
+        'prey_size':  1e-3,
 
         'prey_age': True,
-        'prey_age_max':5.0,
+        'prey_age_max':30.0,
 
         'prey_energy': True,
         'prey_energy_max':1.0,
-        'prey_energy_speed_delta':0.25, # Per second at max speed
-        'prey_energy_time_delta':0.25, # Per second
+        'prey_energy_speed_delta':0.15, # Per second at max speed
+        'prey_energy_time_delta':0.05, # Per second
 
-        'prey_needs_food': False,
+        'prey_needs_food': True,
         'prey_food_source': 'food source',
 
-
         'prey_vision': True,
-        'prey_eye_offset': math.pi/2.,#30 * math.pi / 180,
-        'prey_eye_fov': math.pi,#30 * math.pi / 180,
-        'prey_eye_dist': 0.5,#1e-1,
+        'prey_eye_offset': 30 * math.pi / 180,
+        'prey_eye_fov': 60 * math.pi / 180,
+        'prey_eye_dist': simulation_parameters['cell_size']/2.,
         'prey_eye_rays': 5,
 
         'prey_brain': True,
@@ -91,14 +93,17 @@ def main():
         'prey_brain_weights':None,
         'prey_brain_biases':None,
         'prey_brain_AF':[AF.tanh],
+        'prey_mutation_max':1e-1,
+        'prey_mutation_floor':1e-2,
+        'prey_mutation_halflife':10.0,
 
         'prey_spawns_fixed': True,
-        'prey_spawn_time_fixed': 1.0,
+        'prey_spawn_time_fixed': 5.0,
         'prey_spawns_proba': False,
         'prey_spawn_prob_sec': 'food source',
 
         'prey_new_spawn_delay': 1.0,
-        'prey_spawn_energy_min': 0.5,
+        'prey_spawn_energy_min': 0.4,
         'prey_spawn_energy_delta': 0.1,
     }
 
@@ -133,6 +138,19 @@ def main():
     initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
     box.run_simulation()
+    #foo = characters.Prey(
+    #    0.5,
+    #    0.5,
+    #    0.1,
+    #    parameters.Speed(
+    #        0.1,
+    #        0.1
+    #    ),
+    #    input_parameters=character_parameters,
+    #)
+    #for x,y in foo.get_pickle_obj():
+    #    print(x,'\t',y,'\t',type(y))
+
 
 if __name__ == "__main__":
     #inp_args = __read_args__()

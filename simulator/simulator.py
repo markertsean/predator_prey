@@ -429,8 +429,7 @@ class SimulationBox:
                                     break
 
                             if no_collisions:
-                                #TODO: mutation rate
-                                self.embed( char.spawn( x, y, 0.1 ) )
+                                self.embed( char.spawn( x, y ) )
                                 spawned=True
                                 any_spawned |= True
         return any_spawned
@@ -454,10 +453,7 @@ class SimulationBox:
         with open(output_path+output_fn,'wb') as f:
             for key in sorted(self.cell_dict.keys()):
                 for c in self.cell_dict[key]:
-                    try:
-                        pkl.dump(c,f)
-                    except:
-                        pass
+                    pkl.dump(c.get_pickle_obj(),f)
 
         output_fn = 'simple_snapshot_{:09d}.pkl'.format(self.current_step)
         with open(output_path+output_fn,'wb') as f:
@@ -475,7 +471,7 @@ class SimulationBox:
                         'age':c.get_age(),
                     }
                     pkl.dump(out_dict,f)
-        #####################
+        #DEBUG
         with open(output_path+"debug.txt",'a') as f:
             for key in sorted(self.cell_dict.keys()):
                 for c in self.cell_dict[key]:

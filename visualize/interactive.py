@@ -1,6 +1,7 @@
 from bokeh.io import curdoc
 from bokeh.plotting import figure, show
-from bokeh.models import Range1d, ColumnDataSource
+from bokeh.layouts import column, row, widgetbox
+from bokeh.models import Range1d, ColumnDataSource, Button, Slider
 import numpy as np
 import pandas as pd
 import pickle as pkl
@@ -25,7 +26,7 @@ import visualize as viz
 #p = figure(sizing_mode="stretch_width", tooltips="Data point @x has the value @y",max_width=500, height=250)
 #
 ##p.y_range=Range1d(bounds=(0, 1))
-#                
+#
 ## add a renderer
 #p.line(x, y)
 #
@@ -63,6 +64,88 @@ circle = p.circle(x, y, fill_color=colors, line_color="blue", size=15)
 
 
 '''
+
+class Visualizer:
+    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df):
+        self.play_button = Button(label="Play")
+
+        self.current_time = 0.0
+        self.time_step = simulation_params['time_step'] * simulation_params['snapshot_step']
+        self.max_time = 5.#simulation_params['max_steps'] * simulation_params['time_step']
+        self.time_slider = Slider(
+            start=0.0,
+            end=self.max_time,
+            value=0.0,
+            step=self.time_step,
+            title="Time:"
+        )
+
+        self.food_source_bokeh_input = ColumnDataSource(food_source_obj_df)
+
+        self.prey_df = prey_obj_df.copy()
+        self.prey_iter_df = self.prey_df.loc[self.prey_df['time']==self.current_time]
+
+        self.fig = figure( title="Box", x_axis_label="x", y_axis_label="y", sizing_mode='scale_height')
+        self.fig.x_range = Range1d( bounds=(0,1) )
+        self.fig.y_range = Range1d( bounds=(0,1) )
+
+        self.food_sources_fig = self.fig.circle(
+            source=self.food_source_bokeh_input,
+            x='x',
+            y='y',
+            radius_units='data',
+            radius='radius',
+            fill_color = (100,200,255),
+            fill_alpha = 0.30,
+            line_alpha = 0.0
+        )
+
+        self.prey_data_cols = ['id','x','y','speed','orientation','radius']
+        self.prey_fig = self.fig.circle(
+            source=ColumnDataSource(
+                self.prey_iter_df[self.prey_data_cols]
+            ),
+            x='x',
+            y='y',
+            radius_units='data',
+            radius='radius',
+            fill_color = (100,255,100),
+            fill_alpha = 1.0,
+            line_alpha = 0.0
+        )
+        self.callback = None
+
+    def update_chart(self):
+
+        self.time_slider.value += self.time_step
+        self.time_slider.value %= self.max_time
+        self.current_time = self.time_slider.value
+
+        self.prey_iter_df = self.prey_df.loc[
+            abs(self.prey_df['time']-self.time_slider.value) < 1e-4
+        ]
+        print(self.time_slider.value,self.prey_iter_df.shape)
+        self.prey_fig.data_source.data = (
+            self.prey_iter_df[self.prey_data_cols]
+        )
+
+        if (self.current_time > self.max_time):
+            self.current_time = 0.0
+
+    def execute_animation(self):
+        if (self.play_button.label == "Play"):
+            self.play_button.label = "Pause"
+            self.callback = curdoc().add_periodic_callback(self.update_chart,self.time_step * 1000)
+        else:
+            self.play_button.label = "Play"
+            curdoc().remove_periodic_callback(self.callback)
+
+    def run_visualization(self):
+        self.play_button.on_click(self.execute_animation)
+        curdoc().add_root(column(self.fig,self.play_button,self.time_slider))
+        curdoc().add_root(self.time_slider)
+
+
 
 def generate_food_source_scatter_df(char_dict,static_dict):
     fs_df = char_dict['food source'].drop(columns=['time']).drop_duplicates()
@@ -152,7 +235,21 @@ def output_static_plot(char_dict,static_dict):
 
     show(plt)
 
+def animate_plot(simulation_params,char_dict,static_dict):
+    food_source_df = generate_food_source_recursive_boundaries(char_dict, static_dict)
+    prey_time_df = generate_active_char_scatter_df('prey',char_dict,static_dict)
+
+    print(prey_time_df['time'].unique())
+    my_visualizer = Visualizer(
+        simulation_params,
+        food_source_df,
+        prey_time_df
+    )
+    my_visualizer.run_visualization()
+
+
 def main():
+
     project_path = '/'.join(os.getcwd().split('/'))+'/'
     data_path = project_path + 'data/'
 
@@ -165,7 +262,7 @@ def main():
     setup_params = viz.read_setup(input_base_path)
     character_df_dict, static_dict  = viz.read_character(input_snap_path,setup_params)
 
-    output_static_plot(character_df_dict, static_dict)
+    animate_plot(setup_params,character_df_dict, static_dict)
 
-if __name__ == '__main__':
-    main()
+main()
+

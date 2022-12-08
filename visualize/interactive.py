@@ -40,7 +40,7 @@ glyph.fill_color = (255,200,100)
 
 '''
 class CharMarker(glyphs.Circle):
-    def __init__(self):
+    def __init__(self,color,radius,orientation,speed,eye_angle):
         pass
 
 class Visualizer:
@@ -49,7 +49,7 @@ class Visualizer:
         self.callback = None
 
         self.static_dict = static_dict
-        
+
         self.current_time = 0.0
         self.time_step = simulation_params['time_step'] * simulation_params['snapshot_step']
         self.max_time = simulation_params['max_steps'] * simulation_params['time_step']
@@ -98,7 +98,7 @@ class Visualizer:
         )
 
 
-        
+
         self.examine_id = self.prey_iter_df.loc[0]['id']
         self.brain_scale_dict = None
         self.brain_plot = figure(
@@ -123,7 +123,7 @@ class Visualizer:
         this_all_df = self.__dict__[name]
         this_df = self.__dict__[time_name]
         this_id_data = this_df.loc[ this_df['id'] == inp_id ][self.brain_order].values[0]
-        
+
         if ( self.brain_scale_dict is None ):
             self.brain_scale_dict = {}
         if ( name not in self.brain_scale_dict):
@@ -168,7 +168,7 @@ class Visualizer:
             if ( layer_size > max_height ):
                 max_height = layer_size
             input_layers.append(layer_size)
-        
+
         n_plot_layers = len(input_layers)
 
         this_nn = NN.NeuralNetwork(
@@ -192,17 +192,17 @@ class Visualizer:
             if (i_x>0):
                 this_layer = this_nn.get_layer(i_x-1)
                 node_colors.append([])
-        
+
                 node_values.append(this_layer.calc(node_values[i_x-1]))
-        
+
             for i_y in range(0,input_layers[i_x]):
                 x_net.append( x_node_step * i_x + ( x_scale * ( x_min + 1 ) + x_node_off ) )
                 y_net.append( -(i_y - input_layers[i_x]/2. + 0.5) )
-        
+
                 r_tot=0
                 g_tot=0
                 b_tot=0
-                
+
                 if (i_x>0):
                     this_neuron = this_layer.get_neurons()[i_y]
                     weight_sum = 0
@@ -210,11 +210,11 @@ class Visualizer:
                         weight = this_neuron.get_weights()[i_w]
                         val    = node_values[i_x-1][i_w]
                         weight_sum += weight * val
-                        
+
                         r_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().r
                         g_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().g
                         b_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().b
-        
+
                     r = int( r_tot / weight_sum )
                     g = int( g_tot / weight_sum )
                     b = int( b_tot / weight_sum )
@@ -302,7 +302,7 @@ class Visualizer:
         min_dist = 1e10
         min_i = 0
         min_id = self.prey_fig.data_source.data['id'][min_i]
-        
+
         for char_source in [self.prey_fig.data_source.data]:
             this_time_data = char_source
             for i in range(0,this_time_data['id'].shape[0]):
@@ -316,7 +316,7 @@ class Visualizer:
 
         self.examine_id = min_id
         self.gen_brain_plot()
-    
+
     def run_visualization(self):
         self.play_button.on_click(self.execute_animation)
         self.fig.on_event(Tap, self.click)
@@ -429,16 +429,16 @@ def main():
 
     project_path = '/'.join(os.getcwd().split('/'))+'/'
     data_path = project_path + 'data/'
-    
+
     input_version = 'latest'
     if (input_version=='latest'):
         input_version = sorted(os.listdir(data_path))[-1]
     input_base_path = data_path + input_version + '/'
     input_snap_path = input_base_path + 'character_snapshots/'
-    
+
     setup_params = viz.read_setup(input_base_path)
     character_df_dict, static_dict  = viz.read_character(input_snap_path,setup_params)
-    
+
     animate_plot(setup_params,character_df_dict, static_dict)
 
 main()

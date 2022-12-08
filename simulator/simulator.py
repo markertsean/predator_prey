@@ -396,8 +396,8 @@ class SimulationBox:
                                 break
                             spawn_angle = ( init_orientation + sign * i / n_spawn_attempts * math.pi / 2. ) % (2*math.pi)
                             spawn_dist  = 2.1 * char.get_param('radius')
-                            x = ( spawn_dist * math.cos(spawn_angle) ) % self.length
-                            y = ( spawn_dist * math.sin(spawn_angle) ) % self.length
+                            x = ( char.get_param('x') + spawn_dist * math.cos(spawn_angle) ) % self.length
+                            y = ( char.get_param('y') + spawn_dist * math.sin(spawn_angle) ) % self.length
 
                             child_cell = self.get_cell_1D(x,y)
 
@@ -472,21 +472,21 @@ class SimulationBox:
                     }
                     pkl.dump(out_dict,f)
         #DEBUG
-        with open(output_path+"debug.txt",'a') as f:
-            for key in sorted(self.cell_dict.keys()):
-                for c in self.cell_dict[key]:
-                    out_str = (
-                        'id='+str(c.get_param('id'))+","+
-                        'name='+str(c.get_name())+","+
-                        'x='+str(c.get_param('x'))+","+
-                        'y='+str(c.get_param('y'))+","+
-                        'speed='+str(c.get_speed())+","+
-                        'size='+str(c.get_param('size'))+","+
-                        'orientation='+str(c.get_orientation())+","+
-                        'energy='+str(c.get_energy())+","+
-                        'age='+str(c.get_age())+"\n"
-                    )
-                    f.write(out_str)
+        #with open(output_path+"debug.txt",'a') as f:
+        #    for key in sorted(self.cell_dict.keys()):
+        #        for c in self.cell_dict[key]:
+        #            out_str = (
+        #                'id='+str(c.get_param('id'))+","+
+        #                'name='+str(c.get_name())+","+
+        #                'x='+str(c.get_param('x'))+","+
+        #                'y='+str(c.get_param('y'))+","+
+        #                'speed='+str(c.get_speed())+","+
+        #                'size='+str(c.get_param('size'))+","+
+        #                'orientation='+str(c.get_orientation())+","+
+        #                'energy='+str(c.get_energy())+","+
+        #                'age='+str(c.get_age())+"\n"
+        #            )
+        #            f.write(out_str)
 
     def iterate_step(self):
         something_changed = self.iterate_characters()

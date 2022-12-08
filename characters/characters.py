@@ -545,9 +545,9 @@ class Prey(Character):
                     ))
                     raynum += 1
 
-            raynum = 0
             for obj in self.eyes.get_param("possible_objects"):
                 obj_name = '_'.join(obj.split(' '))
+                raynum = 0
                 for rays in [
                     self.eyes.get_left_eye_values(obj),
                     self.eyes.get_right_eye_values(obj)

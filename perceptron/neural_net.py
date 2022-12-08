@@ -320,6 +320,9 @@ class NeuralNetwork:
             af_list.append(layer.get_activation_function())
         return af_list
 
+    def get_layer(self,n):
+        return self.layer_list[n]
+
     def calc(self,x):
         x_iter = x
         i = 0

@@ -50,13 +50,13 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':      int(1e3),
-        'time_step':          1e-1,
-        'snapshot_step':  int(1e0),
+        'max_steps':      int(1e5),
+        'time_step':          1e-3,
+        'snapshot_step':  int(1e2),
         
         'box_size':           1e0,
-        'cell_size':          1e-2,
-        'abs_max_speed':      1e-2,
+        'cell_size':          1e-1,
+        'abs_max_speed':      5e-2,
 
         'max_characters': int(5e2),
         'kill_no_diff':       True,
@@ -69,7 +69,7 @@ def main():
         'food_size': simulation_parameters['box_size']*2e-1,
 
         'n_prey': 50,
-        'prey_size':  1e-3,
+        'prey_size':  1e-2,
 
         'prey_age': True,
         'prey_age_max':30.0,
@@ -102,7 +102,7 @@ def main():
         'prey_spawns_proba': False,
         'prey_spawn_prob_sec': 'food source',
 
-        'prey_new_spawn_delay': 1.0,
+        'prey_new_spawn_delay': 0.5,
         'prey_spawn_energy_min': 0.4,
         'prey_spawn_energy_delta': 0.1,
     }

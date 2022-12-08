@@ -244,11 +244,12 @@ class VisionObj:
                     lr[key][i]=val
 
     def place_in_vision(self,obj_type,dist,left_angle,right_angle,max_dist = 10):
-        vision_dist = 0
-        if ( abs(dist) < 10**(-max_dist) ):
-            vision_dist = max_dist
-        else:
-            vision_dist = min(max_dist,np.log10(self.max_dist/dist))
+        vision_dist = ( 1. - (dist/max_dist) )**2
+        #vision_dist = 0
+        #if ( abs(dist) < 10**(-max_dist) ):
+        #    vision_dist = max_dist
+        #else:
+        #    vision_dist = min(max_dist,np.log10(self.max_dist/dist))
 
         for lr, init_bit_center, direction in [
             (self.left ,self.left_ray_angles[0],1),

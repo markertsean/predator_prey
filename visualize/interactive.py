@@ -1,10 +1,11 @@
 from bokeh.io import curdoc
 from bokeh.plotting import figure, show
 from bokeh.layouts import column, row, widgetbox
-from bokeh.models import Range1d, ColumnDataSource, Button, Slider, TapTool
-#from bokeh.model.annotations import Title
+from bokeh.models import Range1d, ColumnDataSource, Button, Slider, TapTool, glyphs
 from bokeh.events import Tap
-from bokeh.colors import HSL, RGB
+from bokeh.colors import HSL,RGB, Color
+import warnings
+import colorsys
 import numpy as np
 import pandas as pd
 import pickle as pkl
@@ -18,34 +19,9 @@ import characters.parameters as parameters
 import perceptron.neural_net as NN
 import visualize as viz
 
-## prepare some data
-#x = [1, 2, 3, 4, 5]
-#y = [4, 5, 5, 7, 2]
-#
-## apply theme to current document
-#curdoc().theme = "dark_minimal"
-#
-## create a plot
-#p = figure(sizing_mode="stretch_width", tooltips="Data point @x has the value @y",max_width=500, height=250)
-#
-##p.y_range=Range1d(bounds=(0, 1))
-#
-## add a renderer
-#p.line(x, y)
-#
-## show the results
-#show(p)
+warnings.filterwarnings("ignore",category=DeprecationWarning)
 
 '''
-from bokeh.io import curdoc
-from bokeh.plotting import figure, show
-from bokeh.models import Range1d
-
-
-source = ColumnDataSource(df)
-p.circle(x='x_values', y='y_values', source=source)
-
-
 # apply theme to current document
 curdoc().theme = "dark_minimal"
 
@@ -62,11 +38,10 @@ circle = p.circle(x, y3, legend_label="Objects", fill_color=(100,200,255), fill_
 glyph = circle.glyph
 glyph.fill_color = (255,200,100)
 
-colors = ["#%02x%02x%02x" % (255, int(round(value * 255 / 100)), 255) for value in y]
-circle = p.circle(x, y, fill_color=colors, line_color="blue", size=15)
-
-
 '''
+class CharMarker(glyphs.Circle):
+    def __init__(self):
+        pass
 
 class Visualizer:
     def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict):
@@ -77,7 +52,7 @@ class Visualizer:
         
         self.current_time = 0.0
         self.time_step = simulation_params['time_step'] * simulation_params['snapshot_step']
-        self.max_time = 5.#simulation_params['max_steps'] * simulation_params['time_step']
+        self.max_time = simulation_params['max_steps'] * simulation_params['time_step']
         self.time_slider = Slider(
             start=0.0,
             end=self.max_time,
@@ -135,104 +110,16 @@ class Visualizer:
         self.brain_bar_plot = None
         self.brain_circle_plot = None
         self.gen_brain_plot()
-        # Should always be the same
-        #self.brain_order = static_dict[self.examine_id]['brain_field_order']
-        #self.brain_data, self.brain_input_vals = self.get_brain_vals(self.examine_id,'prey_df','prey_iter_df')
-        #
-        #
-        #this_static_dict = static_dict[self.examine_id]
-        #
-        #max_height = 0
-        #input_layers = []
-        #for layer_size in [this_static_dict['brain_inputs']]+this_static_dict['brain_layer_sizes']:
-        #    if ( layer_size > max_height ):
-        #        max_height = layer_size
-        #    input_layers.append(layer_size)
-        #
-        #n_plot_layers = len(input_layers)
-        #
-        #node_size   = 0.015
-        #bar_height  = 0.75
-        #x_node_off  = 0.1
-        #x_node_step = 0.5
-        #x_min       = 0
-        #x_scale     = 0.5
-        #x_net       = []
-        #y_net       = []
-        #bar_colors  = []
-        #node_colors = [[]]
-        #node_values = [self.brain_input_vals]
-        #
-        #this_nn = NN.NeuralNetwork(
-        #    this_static_dict['brain_inputs'],
-        #    layer_sizes = this_static_dict['brain_layer_sizes'],
-        #    weights = this_static_dict['brain_weights'],
-        #    biases = this_static_dict['brain_biases'],
-        #    activation_functions = this_static_dict['brain_activation_functions'],
-        #)
-        #
-        #for i in range(0,this_static_dict['brain_inputs']):
-        #    bar_colors.append(HSL(i*360./this_static_dict['brain_inputs'],0.9,0.5))
-        #    node_colors[-1].append(bar_colors[-1].darken(1.0).lighten(self.brain_data[i]*0.66))
-        #
-        #this_layer = None
-        #for i_x in range(0,n_plot_layers):
-        #    x_net.append([])
-        #    y_net.append([])
-        #
-        #    if (i_x>0):
-        #        this_layer = this_nn.get_layer(i_x-1)
-        #        node_colors.append([])
-        #
-        #        node_values.append(this_layer.calc(node_values[i_x-1]))
-        #
-        #    for i_y in range(0,input_layers[i_x]):
-        #        x_net[-1].append( x_node_step * i_x + ( x_scale * ( x_min + 1 ) + x_node_off ) )
-        #        y_net[-1].append( -(i_y - input_layers[i_x]/2. + 0.5) )
-        #
-        #        r_tot=0
-        #        g_tot=0
-        #        b_tot=0
-        #        
-        #        if (i_x>0):
-        #            this_neuron = this_layer.get_neurons()[i_y]
-        #            weight_sum = 0
-        #            for i_w in range(0,len(this_neuron.get_weights())):
-        #                weight = this_neuron.get_weights()[i_w]
-        #                val    = node_values[i_x-1][i_w]
-        #                weight_sum += weight * val
-        #                
-        #                r_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().r
-        #                g_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().g
-        #                b_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().b
-        #
-        #            r = int( r_tot / weight_sum )
-        #            g = int( g_tot / weight_sum )
-        #            b = int( b_tot / weight_sum )
-        #            node_colors[-1].append(RGB(r,g,b))
-        #
-        #    
-        #self.brain_plot = figure(
-        #    title="Brain for id="+str(self.examine_id),
-        #    x_axis_label='',
-        #    y_axis_label='',
-        #    sizing_mode='scale_height',
-        #)
-        #self.brain_plot.hbar(
-        #    right=x_scale * self.brain_data,
-        #    y = [ max_height/2.-bar_height/2.-i for i in range(0,len(self.brain_data)) ],
-        #    height = bar_height,
-        #    color=bar_colors
-        #)
-        #for x_layer, y_layer, c_layer in zip( x_net, y_net, node_colors ):
-        #    self.brain_plot.circle(
-        #        x = x_layer,
-        #        y = y_layer,
-        #        radius = node_size,
-        #        color = c_layer
-        #    )
 
-    def get_brain_vals(self,inp_id,name,time_name):
+    def gen_char_markers(self,inp_df,color):
+        pass
+
+    def gen_char_marker(self,color,radius,orientation,speed,eye_angle):
+        pass
+
+    def get_brain_vals(self,inp_id,inp_name):
+        name = inp_name + "_df"
+        time_name = inp_name + "_iter_df"
         this_all_df = self.__dict__[name]
         this_df = self.__dict__[time_name]
         this_id_data = this_df.loc[ this_df['id'] == inp_id ][self.brain_order].values[0]
@@ -253,107 +140,12 @@ class Visualizer:
 
         return out_array, this_id_data
 
-    def gen_brain_plot_ORIG(self):
-        self.brain_order = self.static_dict[self.examine_id]['brain_field_order']
-        self.brain_data, self.brain_input_vals = self.get_brain_vals(self.examine_id,'prey_df','prey_iter_df')
-
-        this_static_dict = self.static_dict[self.examine_id]
-
-        node_size   = 0.015
-        bar_height  = 0.75
-        x_node_off  = 0.1
-        x_node_step = 0.5
-        x_min       = 0
-        x_scale     = 0.5
-        x_net       = []
-        y_net       = []
-        bar_colors  = []
-        node_colors = [[]]
-        node_values = [self.brain_input_vals]
-
-        max_height = 0
-        input_layers = []
-
-        for layer_size in [this_static_dict['brain_inputs']]+this_static_dict['brain_layer_sizes']:
-            if ( layer_size > max_height ):
-                max_height = layer_size
-            input_layers.append(layer_size)
-        
-        n_plot_layers = len(input_layers)
-
-        this_nn = NN.NeuralNetwork(
-            this_static_dict['brain_inputs'],
-            layer_sizes = this_static_dict['brain_layer_sizes'],
-            weights = this_static_dict['brain_weights'],
-            biases = this_static_dict['brain_biases'],
-            activation_functions = this_static_dict['brain_activation_functions'],
-        )
-        
-        for i in range(0,this_static_dict['brain_inputs']):
-            bar_colors.append(HSL(i*360./this_static_dict['brain_inputs'],0.9,0.5))
-            node_colors[-1].append(bar_colors[-1].darken(1.0).lighten(self.brain_data[i]*0.66))
-
-        this_layer = None
-        for i_x in range(0,n_plot_layers):
-            x_net.append([])
-            y_net.append([])
-
-            if (i_x>0):
-                this_layer = this_nn.get_layer(i_x-1)
-                node_colors.append([])
-
-                node_values.append(this_layer.calc(node_values[i_x-1]))
-
-            for i_y in range(0,input_layers[i_x]):
-                x_net[-1].append( x_node_step * i_x + ( x_scale * ( x_min + 1 ) + x_node_off ) )
-                y_net[-1].append( -(i_y - input_layers[i_x]/2. + 0.5) )
-
-                r_tot=0
-                g_tot=0
-                b_tot=0
-                
-                if (i_x>0):
-                    this_neuron = this_layer.get_neurons()[i_y]
-                    weight_sum = 0
-                    for i_w in range(0,len(this_neuron.get_weights())):
-                        weight = this_neuron.get_weights()[i_w]
-                        val    = node_values[i_x-1][i_w]
-                        weight_sum += weight * val
-                        
-                        r_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().r
-                        g_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().g
-                        b_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().b
-
-                    r = int( r_tot / weight_sum )
-                    g = int( g_tot / weight_sum )
-                    b = int( b_tot / weight_sum )
-                    node_colors[-1].append(RGB(r,g,b))
-
-            
-        brain_plot = figure(
-            title="Brain for id="+str(self.examine_id),
-            x_axis_label='',
-            y_axis_label='',
-            sizing_mode='scale_height',
-        )
-        brain_plot.hbar(
-            right=x_scale * self.brain_data,
-            y = [ max_height/2.-bar_height/2.-i for i in range(0,len(self.brain_data)) ],
-            height = bar_height,
-            color=bar_colors
-        )
-        for x_layer, y_layer, c_layer in zip( x_net, y_net, node_colors ):
-            brain_plot.circle(
-                x = x_layer,
-                y = y_layer,
-                radius = node_size,
-                color = c_layer
-            )
-        return brain_plot
-
     def gen_brain_plot(self):
+        name = 'prey'
+        if ( self.examine_id not in self.__dict__[name+"_iter_df"]['id'].unique() ):
+            return
         self.brain_order = self.static_dict[self.examine_id]['brain_field_order']
-        self.brain_data, self.brain_input_vals = self.get_brain_vals(self.examine_id,'prey_df','prey_iter_df')
+        self.brain_data, self.brain_input_vals = self.get_brain_vals(self.examine_id,name)
 
         this_static_dict = self.static_dict[self.examine_id]
 
@@ -386,10 +178,13 @@ class Visualizer:
             biases = this_static_dict['brain_biases'],
             activation_functions = this_static_dict['brain_activation_functions'],
         )
-        
+
+        # Set up brain colors based on height in graph, so is rainbow
         for i in range(0,this_static_dict['brain_inputs']):
+            #r,g,b = colorsys.hls_to_rgb( float(i)/this_static_dict['brain_inputs'], 0.5, 0.9 )
+            #bar_colors.append( RGB(int(r*255),int(g*255),int(b*255)) )
             bar_colors.append(HSL(i*360./this_static_dict['brain_inputs'],0.9,0.5))
-            node_colors[-1].append(bar_colors[-1].darken(1.0).lighten(self.brain_data[i]*0.66))
+            node_colors[-1].append(bar_colors[-1].darken(0.5).lighten(self.brain_data[i]*0.66))
 
         # Place coordinates centered around y=0, set colors based on node values and weights
         this_layer = None
@@ -472,6 +267,10 @@ class Visualizer:
     def update_chart(self):
 
         self.time_slider.value += self.time_step
+        self.slider_callback('','','')
+
+    def slider_callback(self,attr,old,new):
+
         self.time_slider.value %= self.max_time
         self.current_time = self.time_slider.value
 
@@ -516,10 +315,12 @@ class Visualizer:
                     min_id = self.prey_fig.data_source.data['id'][min_i]
 
         self.examine_id = min_id
+        self.gen_brain_plot()
     
     def run_visualization(self):
         self.play_button.on_click(self.execute_animation)
         self.fig.on_event(Tap, self.click)
+        self.time_slider.on_change('value',self.slider_callback)
         curdoc().add_root(row(column(self.fig,self.play_button,self.time_slider),self.brain_plot))
 
 
@@ -628,16 +429,16 @@ def main():
 
     project_path = '/'.join(os.getcwd().split('/'))+'/'
     data_path = project_path + 'data/'
-
+    
     input_version = 'latest'
     if (input_version=='latest'):
         input_version = sorted(os.listdir(data_path))[-1]
     input_base_path = data_path + input_version + '/'
     input_snap_path = input_base_path + 'character_snapshots/'
-
+    
     setup_params = viz.read_setup(input_base_path)
     character_df_dict, static_dict  = viz.read_character(input_snap_path,setup_params)
-
+    
     animate_plot(setup_params,character_df_dict, static_dict)
 
 main()

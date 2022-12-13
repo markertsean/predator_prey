@@ -1,4 +1,9 @@
 from datetime import datetime
+import multiprocessing as mp
+#import pathos, multiprocess
+#from pathos.multiprocess import ProcessingPool
+from pathos.pools import ProcessPool
+import dill
 import math
 import numpy as np
 import random
@@ -22,6 +27,7 @@ class SimulationBox:
         snapshot_step,
         max_characters,
         seed,
+        n_jobs = 1,
         output_path = __project_path__+"data/",
         kill_early = True
     ):
@@ -50,6 +56,9 @@ class SimulationBox:
         assert (seed is None) or isinstance(seed,int)
         self.seed = seed
         random.seed(self.seed)
+
+        assert isinstance(n_jobs,int) and (n_jobs <= mp.cpu_count())
+        self.n_jobs = n_jobs
 
         assert isinstance(output_path,str)
         self.output_path = output_path + datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
@@ -171,6 +180,18 @@ class SimulationBox:
             return 1
         return 2
 
+    def distance_two_points(self,x1,y1,x2,y2):
+        return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
+
+    def distance_two_circles(self,x1,y1,r1,x2,y2,r2):
+        return max(self.distance_two_points(x1,y1,x2,y2)-r1-r2,0)
+
+    def relative_angle_between_characters(self,char_1,char_2):
+        return math.atan2(
+            (char_2.get_param('y')-char_1.get_param('y')),
+            (char_2.get_param('x')-char_1.get_param('x'))
+        )
+
     # TODO: implement "mouth" based on orientation
     def check_collisions_feed(self,inp_char,new_x,new_y,cell_number,new_position_dict):
         # Ignore checking against self
@@ -269,179 +290,180 @@ class SimulationBox:
 
         return position_changed
 
-    def update_age_by_cell(self):
-        age_changed = False
-        survived_dict = self.__generate_blank_cell_dict__()
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            for char in cell:
-                if ( 'age' in char.list_params() ):
-                    age_changed |= True
-                    if ( char.age_character(self.time_step) ):
-                        survived_dict[cell_number].append(char)
-                    else:
-                        self.n_characters -= 1
+    def update_cell_age(self,cell_number):
+        survived_list = []
+        cell = self.cell_dict[cell_number]
+        any_age_changed = False
+        for char in cell:
+            if ( 'age' in char.list_params() ):
+                any_age_changed |= True
+                if ( char.age_character(self.time_step) ):
+                    survived_list.append(char)
                 else:
-                    survived_dict[cell_number].append(char)
+                    self.n_characters -= 1
+            else:
+                survived_list.append(char)
+        
+        self.cell_dict[cell_number] = survived_list
+        return any_age_changed
 
-        self.cell_dict = survived_dict
-        return age_changed
-
-    def update_energy_by_cell(self):
-        energy_changed = False
-        survived_dict = self.__generate_blank_cell_dict__()
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            for char in cell:
-                if ( 'energy' in char.list_params() ):
-                    energy_changed |= True
-                    if ( char.use_energy(self.time_step) ):
-                        survived_dict[cell_number].append(char)
-                    else:
-                        self.n_characters -= 1
+    def update_cell_energy(self,cell_number):
+        survived_list = []
+        cell = self.cell_dict[cell_number]
+        any_energy_changed = False
+        for char in cell:
+            if ( 'energy' in char.list_params() ):
+                any_energy_changed |= True
+                if ( char.use_energy(self.time_step) ):
+                    survived_list.append(char)
                 else:
-                    survived_dict[cell_number].append(char)
-        self.cell_dict = survived_dict
-        return energy_changed
+                    self.n_characters -= 1
+            else:
+                survived_list.append(char)
+        self.cell_dict[cell_number] = survived_list
+        return any_energy_changed
 
-    def distance_two_points(self,x1,y1,x2,y2):
-        return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
-
-    def distance_two_circles(self,x1,y1,r1,x2,y2,r2):
-        return max(self.distance_two_points(x1,y1,x2,y2)-r1-r2,0)
-
-    def relative_angle_between_characters(self,char_1,char_2):
-        return math.atan2(
-            (char_2.get_param('y')-char_1.get_param('y')),
-            (char_2.get_param('x')-char_1.get_param('x'))
-        )
-
-    def update_vision_by_cell(self):
-        vision_changed = False
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            for char in cell:
-                if (
-                    ('vision' not in char.list_params()) or
-                    (not char.get_param('vision'))
-                ):
-                    continue
-
-                char.get_param('eyes').reset_vision(0.0)
-                ll_cell_tracker = 0
-                for neighbor_cell_linked in self.linked_list[cell_number]:
-                    # Offsets due to open box
-                    x_offset, y_offset = self.get_boundary_offset(cell_number,ll_cell_tracker)
-                    ll_cell_tracker += 1
-                    for visible_obj in self.cell_dict[neighbor_cell_linked]:
-
-                        if (char.get_param('id') == visible_obj.get_param('id')):
-                            continue
-
-                        obj_dist = self.distance_two_circles(
-                            char.get_param('x'),
-                            char.get_param('y'),
-                            char.get_param('radius'),
-                            visible_obj.get_param('x') + x_offset,
-                            visible_obj.get_param('y') + y_offset,
-                            visible_obj.get_param('radius')
-                        )
-
-                        # Only check vision lines if close enough
-                        if ( char.get_param('eyes').get_param('max_dist') >= obj_dist ):
-                            ang_obj_char = ( self.relative_angle_between_characters( char, visible_obj ) - char.get_param('orientation').value ) % (2*math.pi)
-                            left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
-                            right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
-                            char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
-                            vision_changed |= True
-
-        return vision_changed
-
-    def update_action_by_cell(self):
+    def update_cell_action(self,cell_number):
         action_changed = False
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            for char in cell:
-                if (
-                    ('interprets' in char.list_params()) and
-                    char.get_param('interprets')
-                ):
-                    char.act(self.time_step)
-                    action_changed |= True
-
+        cell = self.cell_dict[cell_number]
+        for char in cell:
+            if (
+                ('interprets' in char.list_params()) and
+                char.get_param('interprets')
+            ):
+                char.act(self.time_step)
+                action_changed |= True
         return action_changed
 
-    def spawn_by_cell(self):
+    def update_cell_vision(self,cell_number):
+        vision_changed = False
+        cell = self.cell_dict[cell_number]
+        for char in cell:
+            if (
+                ('vision' not in char.list_params()) or
+                (not char.get_param('vision'))
+            ):
+                continue
+
+            char.get_param('eyes').reset_vision(0.0)
+            ll_cell_tracker = 0
+            for neighbor_cell_linked in self.linked_list[cell_number]:
+                # Offsets due to open box
+                x_offset, y_offset = self.get_boundary_offset(cell_number,ll_cell_tracker)
+                ll_cell_tracker += 1
+                for visible_obj in self.cell_dict[neighbor_cell_linked]:
+
+                    if (char.get_param('id') == visible_obj.get_param('id')):
+                        continue
+
+                    obj_dist = self.distance_two_circles(
+                        char.get_param('x'),
+                        char.get_param('y'),
+                        char.get_param('radius'),
+                        visible_obj.get_param('x') + x_offset,
+                        visible_obj.get_param('y') + y_offset,
+                        visible_obj.get_param('radius')
+                    )
+
+                    # Only check vision lines if close enough
+                    if ( char.get_param('eyes').get_param('max_dist') >= obj_dist ):
+                        ang_obj_char = ( self.relative_angle_between_characters( char, visible_obj ) - char.get_param('orientation').value ) % (2*math.pi)
+                        left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
+                        right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
+                        char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
+                        vision_changed |= True
+        return vision_changed
+
+    def update_cell_spawn(self,cell_number):
         any_spawned = False
         n_spawn_attempts = 5
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            for char in cell:
-                if self.box_is_full():
-                    continue
-                if (
-                    ('reproduces' in char.list_params()) and
-                    char.get_param('reproduces') and
-                    char.can_spawn(self.time_step)
-                ):
-                    spawned = False
-                    # Try to spawn behind, to avoid collisions
-                    init_orientation = ( char.get_orientation() + math.pi ) % (2*math.pi)
-                    # Attempt to spawn 10 times, checking for collision
-                    for i in range(0,n_spawn_attempts):
+        cell = self.cell_dict[cell_number]
+        for char in cell:
+            if self.box_is_full():
+                continue
+            if (
+                ('reproduces' in char.list_params()) and
+                char.get_param('reproduces') and
+                char.can_spawn(self.time_step)
+            ):
+                spawned = False
+                # Try to spawn behind, to avoid collisions
+                init_orientation = ( char.get_orientation() + math.pi ) % (2*math.pi)
+                # Attempt to spawn 10 times, checking for collision
+                for i in range(0,n_spawn_attempts):
+                    if spawned:
+                        break
+                    for sign in [-1.,1.]:
                         if spawned:
                             break
-                        for sign in [-1.,1.]:
-                            if spawned:
-                                break
-                            spawn_angle = ( init_orientation + sign * i / n_spawn_attempts * math.pi / 2. ) % (2*math.pi)
-                            spawn_dist  = 2.1 * char.get_param('radius')
-                            x = ( char.get_param('x') + spawn_dist * math.cos(spawn_angle) ) % self.length
-                            y = ( char.get_param('y') + spawn_dist * math.sin(spawn_angle) ) % self.length
+                        spawn_angle = ( init_orientation + sign * i / n_spawn_attempts * math.pi / 2. ) % (2*math.pi)
+                        spawn_dist  = 2.1 * char.get_param('radius')
+                        x = ( char.get_param('x') + spawn_dist * math.cos(spawn_angle) ) % self.length
+                        y = ( char.get_param('y') + spawn_dist * math.sin(spawn_angle) ) % self.length
 
-                            child_cell = self.get_cell_1D(x,y)
+                        child_cell = self.get_cell_1D(x,y)
 
-                            no_collisions = True
+                        no_collisions = True
 
-                            ll_cell_tracker = 0
-                            for neighbor_cell_linked in self.linked_list[cell_number]:
+                        ll_cell_tracker = 0
+                        for neighbor_cell_linked in self.linked_list[cell_number]:
 
-                                # Offsets due to open box
-                                x_offset, y_offset = self.get_boundary_offset(child_cell,ll_cell_tracker)
-                                ll_cell_tracker += 1
+                            # Offsets due to open box
+                            x_offset, y_offset = self.get_boundary_offset(child_cell,ll_cell_tracker)
+                            ll_cell_tracker += 1
 
-                                for neighbor in self.cell_dict[neighbor_cell_linked]:
-                                    overlap_val = self.overlap(
-                                        neighbor.get_param('x') + x_offset,
-                                        neighbor.get_param('y') + y_offset,
-                                        neighbor.get_param('radius'),
-                                        x,
-                                        y,
-                                        char.get_param('radius')
-                                    )
+                            for neighbor in self.cell_dict[neighbor_cell_linked]:
+                                overlap_val = self.overlap(
+                                    neighbor.get_param('x') + x_offset,
+                                    neighbor.get_param('y') + y_offset,
+                                    neighbor.get_param('radius'),
+                                    x,
+                                    y,
+                                    char.get_param('radius')
+                                )
 
-                                    if (overlap_val!=0):
-                                        no_collisions = False
-                                    if (not no_collisions):
-                                        break
-
+                                if (overlap_val!=0):
+                                    no_collisions = False
                                 if (not no_collisions):
                                     break
 
-                            if no_collisions:
-                                self.embed( char.spawn( x, y ) )
-                                spawned=True
-                                any_spawned |= True
+                            if (not no_collisions):
+                                break
+
+                        if no_collisions:
+                            self.embed( char.spawn( x, y ) )
+                            spawned=True
+                            any_spawned |= True
         return any_spawned
 
-    def iterate_characters(self):
+    def run_cell_operations(self,cell_number):
         something_changed = False
-        something_changed |= self.update_age_by_cell()
-        something_changed |= self.update_energy_by_cell()
+        something_changed |= self.update_cell_age   ( cell_number )
+        something_changed |= self.update_cell_vision( cell_number )
+        something_changed |= self.update_cell_action( cell_number ) # Update direction, speed
+        something_changed |= self.update_cell_spawn ( cell_number )
+        something_changed |= self.update_cell_energy( cell_number )
+        return something_changed
+
+    def iterate_characters(self):
+        run_parallel = True
+        something_changed = False
+
+        if (run_parallel):
+            pool = ProcessPool( nodes=self.n_jobs )
+            pool.restart()
+            pool_results = pool.amap(
+                self.run_cell_operations,
+                [cell_number for cell_number in self.cell_dict.keys()]
+            )
+            pool.close()
+            pool.join()
+            something_changed = any( pool_results.get() )
+        else:
+            for cell_number in self.cell_dict.keys():
+                something_changed |= self.run_cell_operations(cell_number)
+
         something_changed |= self.update_position_by_cell() #Feeds if collides with food source
-        something_changed |= self.update_vision_by_cell()
-        something_changed |= self.update_action_by_cell() # Update direction, speed
-        something_changed |= self.spawn_by_cell()
 
         return something_changed
 
@@ -472,43 +494,27 @@ class SimulationBox:
                     }
                     pkl.dump(out_dict,f)
         #DEBUG
-        #with open(output_path+"debug.txt",'a') as f:
-        #    for key in sorted(self.cell_dict.keys()):
-        #        for c in self.cell_dict[key]:
-        #            out_str = (
-        #                'id='+str(c.get_param('id'))+","+
-        #                'name='+str(c.get_name())+","+
-        #                'x='+str(c.get_param('x'))+","+
-        #                'y='+str(c.get_param('y'))+","+
-        #                'speed='+str(c.get_speed())+","+
-        #                'size='+str(c.get_param('size'))+","+
-        #                'orientation='+str(c.get_orientation())+","+
-        #                'energy='+str(c.get_energy())+","+
-        #                'age='+str(c.get_age())+"\n"
-        #            )
-        #            f.write(out_str)
+        with open(output_path+"debug.txt",'a') as f:
+            for key in sorted(self.cell_dict.keys()):
+                for c in self.cell_dict[key]:
+                    out_str = (
+                        'id='+str(c.get_param('id'))+","+
+                        'name='+str(c.get_name())+","+
+                        'x='+str(c.get_param('x'))+","+
+                        'y='+str(c.get_param('y'))+","+
+                        'speed='+str(c.get_speed())+","+
+                        'size='+str(c.get_param('size'))+","+
+                        'orientation='+str(c.get_orientation())+","+
+                        'energy='+str(c.get_energy())+","+
+                        'age='+str(c.get_age())+"\n"
+                    )
+                    f.write(out_str)
 
     def iterate_step(self):
         something_changed = self.iterate_characters()
         if (self.current_step % self.snapshot_step == 0 ):
             self.generate_snapshots()
         return something_changed
-
-    def check_for_change(self,prev_cells):
-        # Cycle through cells, if no difference, stop early
-        for cell_number in self.cell_dict:
-            cell = self.cell_dict[cell_number]
-            if ( len(cell) != len(prev_cells[cell_number]) ):
-                return True
-
-            for char in cell:
-                if (char not in prev_cells[cell_number]):
-                    return True
-
-            for char in prev_cells[cell_number]:
-                if (char not in cell):
-                    return True
-        return False
 
     def run_simulation(self):
         start_time = datetime.now()

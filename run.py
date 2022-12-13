@@ -50,9 +50,9 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':      int(1e5),
-        'time_step':          1e-3,
-        'snapshot_step':  int(1e2),
+        'max_steps':      int(1e3),
+        'time_step':          1e-1,
+        'snapshot_step':  int(1e0),
         
         'box_size':           1e0,
         'cell_size':          1e-1,
@@ -60,6 +60,8 @@ def main():
 
         'max_characters': int(5e2),
         'kill_no_diff':       True,
+
+        'n_jobs':                4,
 
         'seed':               None,
     }
@@ -116,6 +118,7 @@ def main():
         simulation_parameters['snapshot_step'],
         simulation_parameters['max_characters'],
         simulation_parameters['seed'],
+        n_jobs = simulation_parameters['n_jobs'],
         kill_early = simulation_parameters['kill_no_diff'],
     )
 
@@ -138,18 +141,6 @@ def main():
     initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
     box.run_simulation()
-    #foo = characters.Prey(
-    #    0.5,
-    #    0.5,
-    #    0.1,
-    #    parameters.Speed(
-    #        0.1,
-    #        0.1
-    #    ),
-    #    input_parameters=character_parameters,
-    #)
-    #for x,y in foo.get_pickle_obj():
-    #    print(x,'\t',y,'\t',type(y))
 
 
 if __name__ == "__main__":

@@ -1,8 +1,7 @@
 from datetime import datetime
 import multiprocessing as mp
-#import pathos, multiprocess
-#from pathos.multiprocess import ProcessingPool
-from pathos.pools import ProcessPool
+from pathos.pools import ProcessPool,ThreadPool,ParallelPool
+from multiprocess.dummy import Pool
 import dill
 import math
 import numpy as np
@@ -28,6 +27,7 @@ class SimulationBox:
         max_characters,
         seed,
         n_jobs = 1,
+        parallel_char_min = None,
         output_path = __project_path__+"data/",
         kill_early = True
     ):
@@ -59,6 +59,10 @@ class SimulationBox:
 
         assert isinstance(n_jobs,int) and (n_jobs <= mp.cpu_count())
         self.n_jobs = n_jobs
+        if (self.n_jobs > self.n_cells):
+            self.n_jobs = self.n_cells
+
+        self.parallel_char_min = parallel_char_min
 
         assert isinstance(output_path,str)
         self.output_path = output_path + datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
@@ -290,62 +294,62 @@ class SimulationBox:
 
         return position_changed
 
-    def update_cell_age(self,cell_number):
+    def update_cell_age(self,cell):
         survived_list = []
-        cell = self.cell_dict[cell_number]
         any_age_changed = False
+        n_killed = 0
         for char in cell:
             if ( 'age' in char.list_params() ):
                 any_age_changed |= True
                 if ( char.age_character(self.time_step) ):
                     survived_list.append(char)
                 else:
-                    self.n_characters -= 1
+                    n_killed += 1
             else:
                 survived_list.append(char)
         
-        self.cell_dict[cell_number] = survived_list
-        return any_age_changed
+        return any_age_changed, survived_list, n_killed
 
-    def update_cell_energy(self,cell_number):
+    def update_cell_energy(self,cell):
         survived_list = []
-        cell = self.cell_dict[cell_number]
         any_energy_changed = False
+        n_killed = 0
         for char in cell:
             if ( 'energy' in char.list_params() ):
                 any_energy_changed |= True
                 if ( char.use_energy(self.time_step) ):
                     survived_list.append(char)
                 else:
-                    self.n_characters -= 1
+                    n_killed += 1
             else:
                 survived_list.append(char)
-        self.cell_dict[cell_number] = survived_list
-        return any_energy_changed
+        return any_energy_changed, survived_list, n_killed
 
-    def update_cell_action(self,cell_number):
+    def update_cell_action(self,cell):
         action_changed = False
-        cell = self.cell_dict[cell_number]
+        acted_cell = []
         for char in cell:
+            acted_cell.append( char )
             if (
-                ('interprets' in char.list_params()) and
-                char.get_param('interprets')
+                ('interprets' in acted_cell[-1].list_params()) and
+                acted_cell[-1].get_param('interprets')
             ):
-                char.act(self.time_step)
+                acted_cell[-1].act(self.time_step)
                 action_changed |= True
-        return action_changed
+        return action_changed, acted_cell
 
-    def update_cell_vision(self,cell_number):
+    def update_cell_vision(self,cell,cell_number):
         vision_changed = False
-        cell = self.cell_dict[cell_number]
+        vision_cell = []
         for char in cell:
+            vision_cell.append( char )
             if (
                 ('vision' not in char.list_params()) or
                 (not char.get_param('vision'))
             ):
                 continue
 
-            char.get_param('eyes').reset_vision(0.0)
+            vision_cell[-1].get_param('eyes').reset_vision(0.0)
             ll_cell_tracker = 0
             for neighbor_cell_linked in self.linked_list[cell_number]:
                 # Offsets due to open box
@@ -353,31 +357,31 @@ class SimulationBox:
                 ll_cell_tracker += 1
                 for visible_obj in self.cell_dict[neighbor_cell_linked]:
 
-                    if (char.get_param('id') == visible_obj.get_param('id')):
+                    if (vision_cell[-1].get_param('id') == visible_obj.get_param('id')):
                         continue
 
                     obj_dist = self.distance_two_circles(
-                        char.get_param('x'),
-                        char.get_param('y'),
-                        char.get_param('radius'),
+                        vision_cell[-1].get_param('x'),
+                        vision_cell[-1].get_param('y'),
+                        vision_cell[-1].get_param('radius'),
                         visible_obj.get_param('x') + x_offset,
                         visible_obj.get_param('y') + y_offset,
                         visible_obj.get_param('radius')
                     )
 
                     # Only check vision lines if close enough
-                    if ( char.get_param('eyes').get_param('max_dist') >= obj_dist ):
-                        ang_obj_char = ( self.relative_angle_between_characters( char, visible_obj ) - char.get_param('orientation').value ) % (2*math.pi)
+                    if ( vision_cell[-1].get_param('eyes').get_param('max_dist') >= obj_dist ):
+                        ang_obj_char = ( self.relative_angle_between_characters( vision_cell[-1], visible_obj ) - vision_cell[-1].get_param('orientation').value ) % (2*math.pi)
                         left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
                         right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
-                        char.get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
+                        vision_cell[-1].get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
                         vision_changed |= True
-        return vision_changed
+        return vision_changed, vision_cell
 
-    def update_cell_spawn(self,cell_number):
+    def update_cell_spawn(self,cell,cell_number):
         any_spawned = False
         n_spawn_attempts = 5
-        cell = self.cell_dict[cell_number]
+        spawn_list = []
         for char in cell:
             if self.box_is_full():
                 continue
@@ -431,26 +435,40 @@ class SimulationBox:
                                 break
 
                         if no_collisions:
-                            self.embed( char.spawn( x, y ) )
+                            spawn_list.append( char.spawn( x, y ) )
                             spawned=True
                             any_spawned |= True
-        return any_spawned
+        return any_spawned, spawn_list
 
     def run_cell_operations(self,cell_number):
-        something_changed = False
-        something_changed |= self.update_cell_age   ( cell_number )
-        something_changed |= self.update_cell_vision( cell_number )
-        something_changed |= self.update_cell_action( cell_number ) # Update direction, speed
-        something_changed |= self.update_cell_spawn ( cell_number )
-        something_changed |= self.update_cell_energy( cell_number )
-        return something_changed
+        cell = self.cell_dict[cell_number]
+
+        changed_a, a_cell, n_killed_a = self.update_cell_age( cell )
+        changed_v, v_cell             = self.update_cell_vision( a_cell, cell_number )
+        changed_x, x_cell             = self.update_cell_action( v_cell ) # Update direction, speed
+        changed_s, s_cell             = self.update_cell_spawn ( x_cell, cell_number )
+        changed_e, e_cell, n_killed_e = self.update_cell_energy( x_cell )
+
+        something_changed = any([
+            changed_a,
+            changed_v,
+            changed_x,
+            changed_s,
+            changed_e,
+        ])
+        
+        return cell_number, something_changed, e_cell, n_killed_a + n_killed_e, s_cell
 
     def iterate_characters(self):
-        run_parallel = True
-        something_changed = False
+        run_parallel = (self.n_jobs>1) and (
+            (self.parallel_char_min is None) or
+            (self.parallel_char_min >= self.n_characters)
+        )
 
+        # Run a set of operations in parallel if possible
+        iter_list = []
         if (run_parallel):
-            pool = ProcessPool( nodes=self.n_jobs )
+            pool = ThreadPool(self.n_jobs)
             pool.restart()
             pool_results = pool.amap(
                 self.run_cell_operations,
@@ -458,11 +476,23 @@ class SimulationBox:
             )
             pool.close()
             pool.join()
-            something_changed = any( pool_results.get() )
+            iter_list = pool_results.get()
         else:
             for cell_number in self.cell_dict.keys():
-                something_changed |= self.run_cell_operations(cell_number)
+                iter_list.append( self.run_cell_operations(cell_number) )
 
+        # Bring together results and update cells
+        something_changed = False
+        spawn_list = []
+        for cell_num, changed, updated_cell, n_killed, spawn_cell in iter_list:
+            something_changed |= changed
+            self.cell_dict[cell_num] = updated_cell
+            self.n_characters -= n_killed
+            spawn_list += spawn_cell
+        for child in spawn_list:
+            self.embed( child )
+
+        # Final step move, this cannot be easily parallelized
         something_changed |= self.update_position_by_cell() #Feeds if collides with food source
 
         return something_changed

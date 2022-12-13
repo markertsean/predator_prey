@@ -50,28 +50,29 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
 
 def main():
     simulation_parameters = {
-        'max_steps':      int(1e3),
-        'time_step':          1e-1,
-        'snapshot_step':  int(1e0),
+        'max_steps':       int(1e1),
+        'time_step':           1e-1,
+        'snapshot_step':   int(1e0),
         
-        'box_size':           1e0,
-        'cell_size':          1e-1,
-        'abs_max_speed':      5e-2,
+        'box_size':            1e0,
+        'cell_size':           1e-1,
+        'abs_max_speed':       5e-2,
 
-        'max_characters': int(5e2),
-        'kill_no_diff':       True,
+        'max_characters':  int(5e4),
+        'kill_no_diff':        True,
 
-        'n_jobs':                4,
+        'n_jobs':                 8,
+        'parallel_char_min':   None,#int(3e1),
 
-        'seed':               None,
+        'seed':                33,
     }
 
     character_parameters = {
         'n_food': 10,
         'food_size': simulation_parameters['box_size']*2e-1,
 
-        'n_prey': 50,
-        'prey_size':  1e-2,
+        'n_prey': 5000,
+        'prey_size':  1e-3,
 
         'prey_age': True,
         'prey_age_max':30.0,
@@ -119,6 +120,7 @@ def main():
         simulation_parameters['max_characters'],
         simulation_parameters['seed'],
         n_jobs = simulation_parameters['n_jobs'],
+        parallel_char_min = simulation_parameters['parallel_char_min'],
         kill_early = simulation_parameters['kill_no_diff'],
     )
 

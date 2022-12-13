@@ -44,7 +44,7 @@ class CharMarker(glyphs.Circle):
         pass
 
 class Visualizer:
-    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict):
+    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict,max_time=None):
         self.play_button = Button(label="Play")
         self.callback = None
 
@@ -52,7 +52,11 @@ class Visualizer:
 
         self.current_time = 0.0
         self.time_step = simulation_params['time_step'] * simulation_params['snapshot_step']
-        self.max_time = simulation_params['max_steps'] * simulation_params['time_step']
+        if (max_time==None):
+            self.max_time = simulation_params['max_steps'] * simulation_params['time_step']
+        else:
+            assert isinstance(max_time,(int,float))
+            self.max_time=max_time
         self.time_slider = Slider(
             start=0.0,
             end=self.max_time,
@@ -412,7 +416,7 @@ def output_static_plot(char_dict,static_dict):
 
     show(plt)
 
-def animate_plot(simulation_params,char_dict,static_dict):
+def animate_plot(simulation_params,char_dict,static_dict,max_time):
     food_source_df = generate_food_source_recursive_boundaries(char_dict, static_dict)
     prey_time_df = generate_active_char_scatter_df('prey',char_dict,static_dict)
 
@@ -421,6 +425,7 @@ def animate_plot(simulation_params,char_dict,static_dict):
         food_source_df,
         prey_time_df,
         static_dict,
+        max_time = max_time
     )
     my_visualizer.run_visualization()
 
@@ -437,9 +442,9 @@ def main():
     input_snap_path = input_base_path + 'character_snapshots/'
 
     setup_params = viz.read_setup(input_base_path)
-    character_df_dict, static_dict  = viz.read_character(input_snap_path,setup_params)
+    character_df_dict, static_dict, max_timestep  = viz.read_character(input_snap_path,setup_params)
 
-    animate_plot(setup_params,character_df_dict, static_dict)
+    animate_plot(setup_params,character_df_dict, static_dict, max_timestep)
 
 main()
 

@@ -72,11 +72,12 @@ def read_character(input_path,input_params):
     char_files = sorted(char_files)
     df_dict = {}
     static_dict = {}
+    max_timestep = 0.0
     for fn in char_files:
         snap_str = ''.join(x for x in fn if x.isdigit())
         snap_int = int(snap_str)
         timestep = snap_int * input_params['time_step']
-
+        max_timestep = timestep
         for char in load_multi_pickle(input_path+fn):
             char_dict = {}
             for key,value in char:
@@ -117,7 +118,7 @@ def read_character(input_path,input_params):
         this_dict = df_dict[obj]
         out_df_dict[obj] = pd.DataFrame(this_dict)
         
-    return out_df_dict, static_dict
+    return out_df_dict, static_dict, max_timestep
 
 def extend_food_sources(inp_df):
     this_df = inp_df.copy()

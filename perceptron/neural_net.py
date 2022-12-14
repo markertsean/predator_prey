@@ -7,12 +7,18 @@ from perceptron import activation
 
 sys.path.append('/'.join( __file__.split('/')[:-2] )+'/')
 
+af_deriv_dict = {
+    activation.identity: activation.deriv_identity,
+    activation.logistic: activation.deriv_logistic,
+    activation.tanh: activation.deriv_tanh,
+    activation.relu: activation.deriv_relu,
+}
+
 class Neuron:
     def __init__(
         self,
         n_inputs,
         weights=None,
-        bias=None,
         activation_function=activation.relu,
     ):
         assert isinstance(n_inputs,int)
@@ -23,20 +29,14 @@ class Neuron:
         else:
             self.set_weights( weights )
 
-        if (bias is None):
-            self.bias = Neuron.random_bias()
-        else:
-            self.set_bias(bias)
-
         self.af = activation_function
 
     def __str__(self,n_indent=1):
         _tabs = max(0,n_indent-1)*"\t"
         tabs  = max(0,n_indent  )*"\t"
-        return "{}Neuron:\n{}N inputs: {}\n{}Bias: {}\n{}Activation function: {}\n{}Weights: {}\n".format(
+        return "{}Neuron:\n{}N inputs: {}\n{}Activation function: {}\n{}Weights: {}\n".format(
             _tabs,
             tabs,self.n_inputs,
-            tabs,self.bias,
             tabs,self.af,
             tabs,self.weights,
         )
@@ -44,7 +44,6 @@ class Neuron:
     def __eq__(self,other):
         if (
             (self.n_inputs!=other.n_inputs) or
-            (self.bias    !=other.bias    ) or
             (self.af      !=other.af      )
         ):
             return False
@@ -58,16 +57,6 @@ class Neuron:
 
     def check_weights(x):
         assert isinstance(x,(list,np.ndarray,float,int))
-
-    def random_bias():
-        return random.random()
-
-    def set_bias(self,x):
-        Neuron.check_numeric(x)
-        self.bias = x
-
-    def get_bias(self):
-        return self.bias
 
     def set_array(x,n_inputs):
         Neuron.check_weights(x)
@@ -100,9 +89,13 @@ class Neuron:
     def get_activation(self):
         return self.af
 
-    def calc(self,inp_array):
+    def get_activation_deriv(self):
+        global af_deriv_dict
+        return af_deriv_dict[self.af]
+
+    def calc(self,inp_array,bias):
         inp_x = Neuron.set_array(inp_array,self.n_inputs)
-        return self.af( float(np.dot(inp_x,self.weights)) + self.bias )
+        return self.af( float(np.dot(inp_x,self.weights)) + bias )
 
 class Layer:
     def __init__(
@@ -110,7 +103,7 @@ class Layer:
         n_inputs,
         layer_size,
         weights=None,
-        biases=None,
+        bias=None,
         activation_functions=activation.relu,
     ):
         self.af = activation_functions
@@ -121,17 +114,11 @@ class Layer:
         assert isinstance(n_inputs,int)
         self.n_inputs = n_inputs
 
-        bias_list = []
-        if (biases is None):
-            for i in range(0,self.layer_size):
-                bias_list.append( Neuron.random_bias() )
+        if (bias is None):
+            self.bias = self.random_bias()
         else:
-            Neuron.check_weights( biases )
-            if isinstance(biases,(int,float)):
-                for i in range(0,self.layer_size):
-                    bias_list.append( biases )
-            else:
-                bias_list = Neuron.set_array( biases, self.layer_size )
+            assert isinstance(bias,(int,float))
+            self.bias = bias
 
         weight_list = []
         if (weights is None):
@@ -158,7 +145,6 @@ class Layer:
                 Neuron(
                     self.n_inputs,
                     weight_list[i],
-                    bias_list[i],
                     self.af
                 )
             )
@@ -194,11 +180,15 @@ class Layer:
     def get_neurons(self):
         return self.neuron_list
 
-    def get_biases(self):
-        bias_list = []
-        for neuron in self.neuron_list:
-            bias_list.append(neuron.get_bias())
-        return bias_list
+    def random_bias(self):
+        return random.random()
+
+    def set_bias(self,x):
+        Neuron.check_numeric(x)
+        self.bias = x
+
+    def get_bias(self):
+        return self.bias
 
     def get_weights(self):
         weights_list = []
@@ -210,10 +200,14 @@ class Layer:
     def get_activation_function(self):
         return self.neuron_list[0].get_activation()
 
+    def get_activation_deriv(self,x):
+        global af_deriv_dict
+        return af_deriv_dict[self.neuron_list[0].get_activation()](x)
+
     def calc(self,x):
         y_out = np.zeros(self.layer_size)
         for i in range(0,self.layer_size):
-            y_out[i] = self.neuron_list[i].calc(x)
+            y_out[i] = self.neuron_list[i].calc(x,self.bias)
         return y_out
 
 class NeuralNetwork:
@@ -269,7 +263,7 @@ class NeuralNetwork:
                     n_inputs,
                     layer_size           = layer_sizes[i],
                     weights              = layer_weights[i],
-                    biases               = layer_biases[i],
+                    bias                 = layer_biases[i],
                     activation_functions = layer_af[i],
                 )
             )
@@ -305,7 +299,7 @@ class NeuralNetwork:
     def get_biases(self):
         bias_list = []
         for layer in self.layer_list:
-            bias_list.append(layer.get_biases())
+            bias_list.append(layer.get_bias())
         return bias_list
 
     def get_weights(self):
@@ -323,10 +317,69 @@ class NeuralNetwork:
     def get_layer(self,n):
         return self.layer_list[n]
 
-    def calc(self,x):
+    def calc_each_layer_value(self,x):
         x_iter = x
-        i = 0
+        out_list = []
         for layer in self.layer_list:
-            i = i+1
-            x_iter = layer.calc(x_iter)
-        return x_iter
+            out_list.append(layer.calc(x_iter))
+            x_iter = out_list[-1]
+        return out_list
+
+    def calc_partial(self,x,n):
+        assert n < self.n_layers
+        return calc_each_layer_value(x)[n]
+
+    def calc(self,x):
+        return self.calc_each_layer_value(x)[-1]
+
+    def backprop(self,input_values,errors,learning_rate):
+        assert isinstance(errors,np.ndarray)
+        assert errors.shape[0]==self.layer_list[-1].get_layer_size()
+
+        all_layer_values = self.calc_each_layer_value(input_values)
+        final_values = all_layer_values[-1]
+
+        this_layer_error = errors
+        all_errors = []
+
+        for i in reversed(range(0,self.n_layers)):
+            layer = self.layer_list[i]
+            new_errors = []
+
+            if ( i != self.n_layers-1 ):
+                for j in range(0,layer.layer_size):
+                    error = 0.0
+                    for k in range(0,self.layer_list[i+1].layer_size):
+                        neuron = self.layer_list[i+1].get_neurons()[k]
+                        error += (
+                            neuron.get_weights()[j] * this_layer_error[k]
+                        )
+                    new_errors.append(error)
+            else:
+                for j in range(0,layer.get_layer_size()):
+                    neuron = layer.get_neurons()[j]
+                    new_errors.append(
+                        this_layer_error[j] * layer.get_activation_deriv(
+                            final_values[j]
+                        )
+                    )
+            this_layer_error = new_errors
+            all_errors.append(this_layer_error)
+
+        all_errors = all_errors[::-1]
+
+        inputs = input_values
+        for i in reversed(range(0,self.n_layers)):
+            if ( i != 0 ):
+                inputs = all_layer_values[i-1]
+
+            for j in range(0,self.layer_list[i].get_layer_size()):
+                neuron = self.layer_list[i].get_neurons()[j]
+                weights = neuron.get_weights()
+                for k in range(0,len(inputs)):
+                    weights[k] -= learning_rate * all_errors[i][j] * inputs[k]
+                neuron.set_weights(weights)
+
+                self.layer_list[i].set_bias(
+                    self.layer_list[i].get_bias() - learning_rate * all_errors[i][j]
+                )

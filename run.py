@@ -61,7 +61,7 @@ def main():
         'max_characters':  int(5e4),
         'kill_no_diff':        True,
 
-        'n_jobs':                 8,
+        'n_jobs':                 1,
         'parallel_char_min':   None,#int(3e1),
 
         'seed':                33,

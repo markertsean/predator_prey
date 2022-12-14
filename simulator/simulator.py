@@ -15,6 +15,26 @@ sys.path.append(__project_path__)
 
 import characters.characters as characters
 
+def overlap( x1, y1, r1, x2, y2, r2 ):
+    dist = np.sqrt( (x2-x1)**2 + (y2-y1)**2 )
+    if ( dist>r1+r2 ):
+        return 0
+    if ( dist==r1+r2 ):
+        return 1
+    return 2
+
+def distance_two_points(x1,y1,x2,y2):
+    return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
+
+def distance_two_circles(x1,y1,r1,x2,y2,r2):
+    return max(distance_two_points(x1,y1,x2,y2)-r1-r2,0)
+
+def relative_angle_between_characters(char_1,char_2):
+    return math.atan2(
+        (char_2.get_param('y')-char_1.get_param('y')),
+        (char_2.get_param('x')-char_1.get_param('x'))
+    )
+
 class SimulationBox:
     def __init__(
         self,
@@ -176,26 +196,6 @@ class SimulationBox:
         new_y = ( y + s * np.sin(theta) ) % self.length
         return new_x, new_y
 
-    def overlap(self, x1, y1, r1, x2, y2, r2 ):
-        dist = np.sqrt( (x2-x1)**2 + (y2-y1)**2 )
-        if ( dist>r1+r2 ):
-            return 0
-        if ( dist==r1+r2 ):
-            return 1
-        return 2
-
-    def distance_two_points(self,x1,y1,x2,y2):
-        return np.sqrt( (x1-x2)**2 + (y1-y2)**2 )
-
-    def distance_two_circles(self,x1,y1,r1,x2,y2,r2):
-        return max(self.distance_two_points(x1,y1,x2,y2)-r1-r2,0)
-
-    def relative_angle_between_characters(self,char_1,char_2):
-        return math.atan2(
-            (char_2.get_param('y')-char_1.get_param('y')),
-            (char_2.get_param('x')-char_1.get_param('x'))
-        )
-
     # TODO: implement "mouth" based on orientation
     def check_collisions_feed(self,inp_char,new_x,new_y,cell_number,new_position_dict):
         # Ignore checking against self
@@ -218,7 +218,7 @@ class SimulationBox:
                         continue
 
                     checked_ids.append(character.get_param('id'))
-                    overlap_val = self.overlap(
+                    overlap_val = overlap(
                         character.get_param('x') + x_offset,
                         character.get_param('y') + y_offset,
                         character.get_param('radius'),
@@ -237,7 +237,7 @@ class SimulationBox:
                         character.get_param('collision')
                     ):
                         #TODO: this is broken
-                        inp_char.speed.value =  self.distance_two_circles(
+                        inp_char.speed.value = distance_two_circles(
                             character.get_param('x') + x_offset,
                             character.get_param('y') + y_offset,
                             character.get_param('radius'),
@@ -360,7 +360,7 @@ class SimulationBox:
                     if (vision_cell[-1].get_param('id') == visible_obj.get_param('id')):
                         continue
 
-                    obj_dist = self.distance_two_circles(
+                    obj_dist = distance_two_circles(
                         vision_cell[-1].get_param('x'),
                         vision_cell[-1].get_param('y'),
                         vision_cell[-1].get_param('radius'),
@@ -371,7 +371,7 @@ class SimulationBox:
 
                     # Only check vision lines if close enough
                     if ( vision_cell[-1].get_param('eyes').get_param('max_dist') >= obj_dist ):
-                        ang_obj_char = ( self.relative_angle_between_characters( vision_cell[-1], visible_obj ) - vision_cell[-1].get_param('orientation').value ) % (2*math.pi)
+                        ang_obj_char = ( relative_angle_between_characters( vision_cell[-1], visible_obj ) - vision_cell[-1].get_param('orientation').value ) % (2*math.pi)
                         left_obj_angle  = ang_obj_char + math.atan2( visible_obj.get_param('radius'), obj_dist )
                         right_obj_angle = ang_obj_char + math.atan2(-visible_obj.get_param('radius'), obj_dist )
                         vision_cell[-1].get_param('eyes').place_in_vision(visible_obj.get_name(),obj_dist,left_obj_angle,right_obj_angle)
@@ -417,7 +417,7 @@ class SimulationBox:
                             ll_cell_tracker += 1
 
                             for neighbor in self.cell_dict[neighbor_cell_linked]:
-                                overlap_val = self.overlap(
+                                overlap_val = overlap(
                                     neighbor.get_param('x') + x_offset,
                                     neighbor.get_param('y') + y_offset,
                                     neighbor.get_param('radius'),
@@ -524,21 +524,21 @@ class SimulationBox:
                     }
                     pkl.dump(out_dict,f)
         #DEBUG
-        with open(output_path+"debug.txt",'a') as f:
-            for key in sorted(self.cell_dict.keys()):
-                for c in self.cell_dict[key]:
-                    out_str = (
-                        'id='+str(c.get_param('id'))+","+
-                        'name='+str(c.get_name())+","+
-                        'x='+str(c.get_param('x'))+","+
-                        'y='+str(c.get_param('y'))+","+
-                        'speed='+str(c.get_speed())+","+
-                        'size='+str(c.get_param('size'))+","+
-                        'orientation='+str(c.get_orientation())+","+
-                        'energy='+str(c.get_energy())+","+
-                        'age='+str(c.get_age())+"\n"
-                    )
-                    f.write(out_str)
+        #with open(output_path+"debug.txt",'a') as f:
+        #    for key in sorted(self.cell_dict.keys()):
+        #        for c in self.cell_dict[key]:
+        #            out_str = (
+        #                'id='+str(c.get_param('id'))+","+
+        #                'name='+str(c.get_name())+","+
+        #                'x='+str(c.get_param('x'))+","+
+        #                'y='+str(c.get_param('y'))+","+
+        #                'speed='+str(c.get_speed())+","+
+        #                'size='+str(c.get_param('size'))+","+
+        #                'orientation='+str(c.get_orientation())+","+
+        #                'energy='+str(c.get_energy())+","+
+        #                'age='+str(c.get_age())+"\n"
+        #            )
+        #            f.write(out_str)
 
     def iterate_step(self):
         something_changed = self.iterate_characters()

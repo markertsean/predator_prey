@@ -243,6 +243,18 @@ class VisionObj:
                 for i in range(0,lr[key].shape[0]):
                     lr[key][i]=val
 
+    def get_left_right_bins(self,orientation):
+        bins = []
+        for init_bit_center, direction in [
+            ( self.left_ray_angles[0],1),
+            (self.right_ray_angles[0],-1)
+        ]:
+            step = self.ray_width * direction
+            base = init_bit_center + direction * step / 2.
+
+            bins.append( ( orientation-base) / step )
+        return bins[0], bins[1]
+
     def place_in_vision(self,obj_type,dist,left_angle,right_angle,max_dist = 10):
         vision_dist = ( 1. - (dist/max_dist) )**2
         #vision_dist = 0

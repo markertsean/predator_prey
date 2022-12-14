@@ -203,6 +203,7 @@ class SimulationBox:
         consumed_chars = []
 
         ll_cell_tracker = 0
+        ate = False
         for neighbor_cell_linked in self.linked_list[cell_number]:
 
             # Offsets due to open box
@@ -213,6 +214,7 @@ class SimulationBox:
             for pos_dict in [new_position_dict,self.cell_dict]:
 
                 for character in pos_dict[neighbor_cell_linked]:
+
                     # Ignore repeats, IE already updated
                     if ( character.get_param('id') in checked_ids ):
                         continue
@@ -256,6 +258,10 @@ class SimulationBox:
                         inp_char.eat()
                         if (character.get_param('consumed')):
                             consumed_chars.append(character.get_param('id'))
+                        ate = True
+
+        if ( (not ate) and ("in_food_source" in inp_char.list_params()) ):
+            inp_char.not_eat()
 
         return new_x, new_y, consumed_chars
 

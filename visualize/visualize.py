@@ -103,7 +103,7 @@ def read_character(input_path,input_params):
                         'generation',
                     ]) or
                     (key.startswith('eye') and ('value' not in key)) or
-                    (key.startswith('brain'))
+                    (key.startswith('brain') and not (('weights' in key) or ('biases' in key)))
                 ):
                     static_dict[char_dict['id']][key] = char_dict[key]
                     continue

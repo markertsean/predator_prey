@@ -39,16 +39,20 @@ glyph = circle.glyph
 glyph.fill_color = (255,200,100)
 
 '''
+def dict_time(inp,time_step):
+    return round(inp,int(-np.log10(time_step)))
+
 class CharMarker(glyphs.Circle):
     def __init__(self,color,radius,orientation,speed,eye_angle):
         pass
 
 class Visualizer:
-    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict,max_time=None):
+    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict,brain_dict,max_time=None):
         self.play_button = Button(label="Play")
         self.callback = None
 
         self.static_dict = static_dict
+        self.brain_dict = brain_dict
 
         self.current_time = 0.0
         self.time_step = simulation_params['time_step'] * simulation_params['snapshot_step']
@@ -100,8 +104,6 @@ class Visualizer:
             fill_alpha = 1.0,
             line_alpha = 0.0
         )
-
-
 
         self.examine_id = self.prey_iter_df.loc[0]['id']
         self.brain_scale_dict = None
@@ -175,13 +177,8 @@ class Visualizer:
 
         n_plot_layers = len(input_layers)
 
-        this_nn = NN.NeuralNetwork(
-            this_static_dict['brain_inputs'],
-            layer_sizes = this_static_dict['brain_layer_sizes'],
-            weights = this_static_dict['brain_weights'],
-            biases = this_static_dict['brain_biases'],
-            activation_functions = this_static_dict['brain_activation_functions'],
-        )
+        d_time = dict_time(self.current_time,self.time_step)
+        this_nn = self.brain_dict[d_time][self.examine_id]
 
         # Set up brain colors based on height in graph, so is rainbow
         for i in range(0,this_static_dict['brain_inputs']):
@@ -219,6 +216,7 @@ class Visualizer:
                         g_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().g
                         b_tot += weight * val * node_colors[i_x-1][i_w].to_rgb().b
 
+                    weight_sum += 1e-10
                     r = int( r_tot / weight_sum )
                     g = int( g_tot / weight_sum )
                     b = int( b_tot / weight_sum )
@@ -360,7 +358,7 @@ def generate_food_source_recursive_boundaries(char_dict,static_dict):
             df_list[-1]['y'] = df_list[-1]['y'] + y
     return pd.concat(df_list)
 
-def generate_active_char_scatter_df(name,char_dict,static_dict):
+def generate_active_char_scatter_df(name,char_dict,static_dict,time_step):
     char_df = char_dict[name]
     copy_fields = []
     new_df = pd.DataFrame(char_df['id'].copy())
@@ -375,7 +373,30 @@ def generate_active_char_scatter_df(name,char_dict,static_dict):
         char = static_dict[this_id]
         for key in copy_fields:
             new_df.loc[idx,param] = char[key]
-    return char_df.merge(new_df,on='id',how='inner')
+    brain_cols = []
+    for col in char_df.columns:
+        if ('brain' in col):
+            brain_cols.append(col)
+    brain_dict = {}
+    for t in sorted(char_df['time'].unique()):
+        t_df = char_df.loc[char_df['time']==t]
+        d_t = dict_time(t,time_step)
+        brain_dict[d_t] = {}
+        for idx,row in t_df.iterrows():
+            i = row['id']
+            weights = row['brain_weights']
+            biases  = row['brain_biases']
+            afs     = static_dict[i]['brain_activation_functions']
+            layers  = static_dict[i]['brain_layer_sizes']
+            inputs  = static_dict[i]['brain_inputs']
+            brain_dict[d_t][i] = NN.NeuralNetwork(
+                inputs,
+                layers,
+                weights,
+                biases,
+                afs,
+            )
+    return char_df.merge(new_df,on='id',how='inner').drop(columns=brain_cols), brain_dict
 
 def output_static_plot(char_dict,static_dict):
     food_source_df = generate_food_source_recursive_boundaries(char_dict, static_dict)
@@ -418,13 +439,14 @@ def output_static_plot(char_dict,static_dict):
 
 def animate_plot(simulation_params,char_dict,static_dict,max_time):
     food_source_df = generate_food_source_recursive_boundaries(char_dict, static_dict)
-    prey_time_df = generate_active_char_scatter_df('prey',char_dict,static_dict)
+    prey_time_df, brain_dict = generate_active_char_scatter_df('prey',char_dict,static_dict,simulation_params['time_step'])
 
     my_visualizer = Visualizer(
         simulation_params,
         food_source_df,
         prey_time_df,
         static_dict,
+        brain_dict,
         max_time = max_time
     )
     my_visualizer.run_visualization()

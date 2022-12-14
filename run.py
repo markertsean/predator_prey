@@ -10,7 +10,8 @@ sys.path.append(os.getcwd() + '/')
 import simulator.simulator as simulator
 import characters.characters as characters
 import characters.parameters as parameters
-import perceptron.activation as AF
+import simulation_cfg
+import character_cfg
 
 def initialize_characters_homogenous_isotropic(initialize_dict,inp_box,char_dict):
     for key in initialize_dict:
@@ -49,66 +50,8 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
     print("Wrote "+input_box.get_param('output_path')+fn)
 
 def main():
-    simulation_parameters = {
-        'max_steps':       int(1e1),
-        'time_step':           1e-1,
-        'snapshot_step':   int(1e0),
-        
-        'box_size':            1e0,
-        'cell_size':           1e-1,
-        'abs_max_speed':       5e-2,
-
-        'max_characters':  int(5e4),
-        'kill_no_diff':        True,
-
-        'n_jobs':                 1,
-        'parallel_char_min':   None,#int(3e1),
-
-        'seed':                33,
-    }
-
-    character_parameters = {
-        'n_food': 10,
-        'food_size': simulation_parameters['box_size']*2e-1,
-
-        'n_prey': 5000,
-        'prey_size':  1e-3,
-
-        'prey_age': True,
-        'prey_age_max':30.0,
-
-        'prey_energy': True,
-        'prey_energy_max':1.0,
-        'prey_energy_speed_delta':0.15, # Per second at max speed
-        'prey_energy_time_delta':0.05, # Per second
-
-        'prey_needs_food': True,
-        'prey_food_source': 'food source',
-
-        'prey_vision': True,
-        'prey_eye_offset': 30 * math.pi / 180,
-        'prey_eye_fov': 60 * math.pi / 180,
-        'prey_eye_dist': simulation_parameters['cell_size']/2.,
-        'prey_eye_rays': 5,
-
-        'prey_brain': True,
-        'prey_brain_layers':[2],
-        'prey_brain_weights':None,
-        'prey_brain_biases':None,
-        'prey_brain_AF':[AF.tanh],
-        'prey_mutation_max':1e-1,
-        'prey_mutation_floor':1e-2,
-        'prey_mutation_halflife':10.0,
-
-        'prey_spawns_fixed': True,
-        'prey_spawn_time_fixed': 5.0,
-        'prey_spawns_proba': False,
-        'prey_spawn_prob_sec': 'food source',
-
-        'prey_new_spawn_delay': 0.5,
-        'prey_spawn_energy_min': 0.4,
-        'prey_spawn_energy_delta': 0.1,
-    }
+    simulation_parameters = simulation_cfg.parameters
+    character_parameters  = character_cfg.parameters
 
     box = simulator.SimulationBox(
         simulation_parameters['box_size'],
@@ -146,6 +89,4 @@ def main():
 
 
 if __name__ == "__main__":
-    #inp_args = __read_args__()
-    #run_model_gen_prediction(inp_args)
     main()

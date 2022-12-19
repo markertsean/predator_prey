@@ -355,7 +355,7 @@ class SimulationBox:
             ):
                 continue
 
-            vision_cell[-1].get_param('eyes').reset_vision(0.0)
+            vision_cell[-1].get_param('eyes').reset_vision()
             ll_cell_tracker = 0
             for neighbor_cell_linked in self.linked_list[cell_number]:
                 # Offsets due to open box
@@ -564,12 +564,13 @@ class SimulationBox:
                 hours, remainder = divmod(s, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 print(
-                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}".format(
+                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}, characters = {:06d}".format(
                         self.current_step,
                         (now-prev_time).total_seconds(),
                         int(hours),
                         int(minutes),
-                        seconds
+                        seconds,
+                        self.n_characters
                     )
                 )
                 prev_time=now

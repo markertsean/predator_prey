@@ -35,7 +35,7 @@ class CharacterParameter:
 
     def __str__(self):
         this_dict = self.__dict__
-        out_str = str(this_dict['name']) + ":\n"#str(self.param_dict['name']) + ":\n"
+        out_str = str(this_dict['name']) + ":\n"
         for key in this_dict:
             if (key!='name'):
                 out_str += "\t"+key+":\t"+str(this_dict[key])+"\n"
@@ -93,7 +93,7 @@ class Orientation(CharacterParameter):
         self.value = (
             self.value +
             self.update_mult * (
-                max( 0, x - self.update_minus )
+                x - self.update_minus
             )
         ) % self.max
 
@@ -178,7 +178,8 @@ class VisionObj:
         n_rays,
         objs_to_see = [
             'food source',
-            'prey',
+            #TODO: remove
+            #'prey',
         ],
     ):
         self.n_rays = n_rays
@@ -188,22 +189,40 @@ class VisionObj:
 
         self.left  = {}
         self.right = {}
+        self.left_side_has = {}
+        self.right_side_has = {}
         self.possible_objects = objs_to_see
-        for obj in self.possible_objects:
-            self.left[obj] = np.zeros(self.n_rays)
-            self.right[obj] = np.zeros(self.n_rays)
+        self.closest_left_bin = {}
+        self.closest_right_bin = {}
+        self.closest_left_bin_val = {}
+        self.closest_right_bin_val = {}
+
+        self.reset_vision()
 
         self.ray_width = self.fov / self.n_rays
         left_min = self.offset_angle + self.fov / 2. - self.ray_width / 2.
 
+        self.left_heading_orientation_ray = 0
+        left_heading_orientation_val = 0
+
         self.left_ray_angles = np.zeros(self.n_rays)
         for i in range(0,self.n_rays):
-            self.left_ray_angles[i] = -self.ray_width*i+left_min
+            self.left_ray_angles[i] = (-self.ray_width*i+left_min) % (2*math.pi)
+            if ( abs( self.left_ray_angles[i] - math.pi ) > left_heading_orientation_val ):
+                self.left_heading_orientation_ray = i
+                left_heading_orientation_val = abs( self.left_ray_angles[i] - math.pi )
+
+        self.right_heading_orientation_ray = 0
+        right_heading_orientation_val = 0
 
         self.right_ray_angles = np.zeros(self.n_rays)
         for i in range(0,self.n_rays):
             self.right_ray_angles[i] = (-self.left_ray_angles[i]) % (2*math.pi)
+            if ( abs( self.right_ray_angles[i] - math.pi ) > right_heading_orientation_val ):
+                self.right_heading_orientation_ray = i
+                right_heading_orientation_val = abs( self.right_ray_angles[i] - math.pi )
         self.right_ray_angles = self.right_ray_angles[::-1]
+        self.bins_circle = 2*math.pi / self.fov * self.n_rays
 
     def __eq__(self,other):
         is_equal = (
@@ -237,11 +256,16 @@ class VisionObj:
             for i in range(0,lr.shape[0]):
                 yield (lr[i] + self.ray_width/2., lr[i], lr[i] - self.ray_width/2. )
 
-    def reset_vision(self,val=0.0):
-        for lr in [self.left,self.right]:
-            for key in lr:
-                for i in range(0,lr[key].shape[0]):
-                    lr[key][i]=val
+    def reset_vision(self):
+        for obj in self.possible_objects:
+            self.left[obj] = np.zeros(self.n_rays)
+            self.right[obj] = np.zeros(self.n_rays)
+            self.left_side_has[obj] = False
+            self.right_side_has[obj] = False
+            self.closest_left_bin[obj] = 0
+            self.closest_right_bin[obj] = 0
+            self.closest_left_bin_val[obj] = 0.
+            self.closest_right_bin_val[obj] = 0.
 
     def get_left_right_bins(self,orientation):
         bins = []
@@ -253,44 +277,76 @@ class VisionObj:
             base = init_bit_center + direction * step / 2.
 
             bins.append( ( orientation-base) / step )
-        return bins[0], bins[1]
+        return int(bins[0]), int(bins[1])
 
-    def place_in_vision(self,obj_type,dist,left_angle,right_angle,max_dist = 10):
-        vision_dist = ( 1. - (dist/max_dist) )**2
-        #vision_dist = 0
-        #if ( abs(dist) < 10**(-max_dist) ):
-        #    vision_dist = max_dist
-        #else:
-        #    vision_dist = min(max_dist,np.log10(self.max_dist/dist))
+    def place_in_vision(self,obj_type,dist,left_angle,right_angle):
+        if (
+            (obj_type not in self.possible_objects) or
+            (dist > self.max_dist)
+        ):
+            return
 
-        for lr, init_bit_center, direction in [
-            (self.left ,self.left_ray_angles[0],1),
-            (self.right,self.right_ray_angles[0],-1)
+        vision_dist = ( 1. - (dist/self.max_dist) )**2
+
+        for lr, init_bin_center, direction, lr_str in [
+            (self.left ,self.left_ray_angles[0],1,'left'),
+            (self.right,self.right_ray_angles[0],-1,'right')
         ]:
-            step = self.ray_width * direction
-            base = init_bit_center + direction * step / 2.
+            step = -self.ray_width
+            base = init_bin_center - step / 2.
 
-            left_bin  = ( left_angle-base) / step
-            right_bin = (right_angle-base) / step
+            left_bin  = ( left_angle - base ) / step
+            right_bin = ( right_angle-left_angle ) / step + left_bin
 
-            leftmost_bin  = self.n_rays
-            rightmost_bin = -1
-            # Locate edges of bins
-            for x_bin in [int(left_bin),int(right_bin)]:
-                if (x_bin < leftmost_bin):
-                    leftmost_bin = int(x_bin)
-                if (x_bin > rightmost_bin):
-                    rightmost_bin = int(x_bin)
+            for this_bin_pre in range(max(0,int(left_bin)),int(right_bin)+1):
+                this_bin = int(this_bin_pre % self.bins_circle)
+                if (
+                    ( this_bin < self.n_rays ) and
+                    ( lr[obj_type][this_bin] < vision_dist )
+                ):
+                    lr[obj_type][this_bin] = vision_dist
 
-            # Possible no ray directly in bin, but object crosses bin
-            if (
-                ( leftmost_bin < self.n_rays) and
-                (rightmost_bin >= 0 )
-            ):
-                for this_bin in range(leftmost_bin,rightmost_bin+1):
-                    if ((this_bin>=0) and (this_bin<self.n_rays)):
-                        if (lr[obj_type][this_bin] < vision_dist):
-                            lr[obj_type][this_bin] = vision_dist
+                    if (
+                        (lr_str == 'left') and
+                        (
+                            (vision_dist > self.closest_left_bin_val[obj_type]) or
+                            (
+                                (vision_dist == self.closest_left_bin_val[obj_type]) and
+                                (
+                                    abs(this_bin - self.left_heading_orientation_ray) <
+                                    abs(self.closest_left_bin[obj_type] - self.left_heading_orientation_ray)
+                                )
+                            )
+                        )
+                    ):
+                        self.closest_left_bin[obj_type] = this_bin
+                        self.closest_left_bin_val[obj_type] = vision_dist
+                    if (
+                        (lr_str == 'right') and
+                        (
+                            (vision_dist > self.closest_right_bin_val[obj_type]) or
+                            (
+                                (vision_dist == self.closest_right_bin_val[obj_type]) and
+                                (
+                                    abs(this_bin - self.right_heading_orientation_ray) <
+                                    abs(self.closest_right_bin[obj_type] - self.right_heading_orientation_ray)
+                                )
+                            )
+                        )
+                    ):
+                        self.closest_right_bin[obj_type] = this_bin
+                        self.closest_right_bin_val[obj_type] = vision_dist
+
+                    if (
+                        ( left_angle % (2*math.pi) < math.pi) or
+                        (right_angle % (2*math.pi) < math.pi)
+                    ):
+                        self.left_side_has[obj_type] = True
+                    if (
+                        ( left_angle % (2*math.pi) > math.pi) or
+                        (right_angle % (2*math.pi) > math.pi)
+                    ):
+                        self.right_side_has[obj_type] = True
 
 
     def list_params(self):

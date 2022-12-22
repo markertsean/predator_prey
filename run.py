@@ -86,31 +86,6 @@ def main():
     initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
 
     box.run_simulation()
-    #foo = characters.Prey(
-    #    box.get_param('length')*random.random(),
-    #    box.get_param('length')*random.random(),
-    #    character_parameters['prey_size'],
-    #    parameters.Speed(
-    #        box.get_param('max_speed') * 0.1,
-    #        box.get_param('max_speed')
-    #    ),
-    #    input_parameters=character_parameters,
-    #)
-    #for w in foo.get_param('brain').get_weights():
-    #    print(w)
-    #
-    #dummy_errors = np.zeros(2)
-    #dummy_errors[0] = 1.0
-    #dummy_errors[1] = -1.0
-    #
-    #dummy_inputs = np.zeros(22)+1
-    #
-    #for i in range(0,10):
-    #    foo.get_param('brain').backprop(dummy_inputs,dummy_errors,0.1)
-    #
-    #print('---------------')
-    #for w in foo.get_param('brain').get_weights():
-    #    print(w)
 
 if __name__ == "__main__":
     main()

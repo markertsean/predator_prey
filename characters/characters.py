@@ -406,20 +406,17 @@ class Prey(Character):
             prev_orientation = self.get_orientation()
             prev_speed       = self.get_speed()
 
-        orientation_change_tanh, speed_change = self.interpret_input()
+        orientation_change_tanh, speed_change_tanh = self.interpret_input()
 
         orientation_radians = orientation_change_tanh * 2*math.pi
         delta_orientation = orientation_radians*timestep
         self.orientation.update(delta_orientation)
 
-        speed_change = 0.0
-        self.speed.update(speed_change*timestep)
+        self.speed.update(speed_change_tanh*timestep)
 
         if ( self.learns ):
 
             eyes = self.eyes
-
-            delta_speed = self.get_speed() - prev_speed
 
             orientation = self.get_orientation()
 
@@ -462,9 +459,26 @@ class Prey(Character):
             orientation_reward = 0.
             orientation_reward = ( delta_orientation - expected_heading_angle ) * self.food_orientation_reward
 
+
+            l_ray = int( ( delta_orientation - l_base ) / (-eyes.ray_width) )
+            r_ray = int( ( delta_orientation - r_base ) / (-eyes.ray_width) )
+            delta_ori_has_food = False
+            if (
+                ( ( l_ray < eyes.n_rays ) and ( l_ray >= 0 ) ) or
+                ( ( r_ray < eyes.n_rays ) and ( r_ray >= 0 ) )
+            ):
+                delta_ori_has_food = True
+
+            delta_speed = self.get_speed() - prev_speed
             speed_increase = delta_speed > 0
             speed_decrease = delta_speed < 0
             speed_reward = 0.
+            if ( self.get_speed() == 0 ):
+                speed_reward = -self.food_move_reward
+            elif ( delta_ori_has_food == speed_increase ):
+                speed_reward = -self.food_move_reward * delta_speed
+            else:
+                speed_reward = self.food_move_reward * delta_speed
 
             input_list = self.get_interpret_vars()
 
@@ -473,12 +487,6 @@ class Prey(Character):
                 np.array([orientation_reward,speed_reward]),
                 self.learning_rate()
             )
-
-            #TODO: need to have resistance, consider momentum
-            #orientation_change_tanh = 1
-            #if (random.random()<0.01):
-            #    print("Kick")
-            #    self.orientation.value = random.random()*math.pi
 
     def get_interpret_vars(self):
         input_list = []

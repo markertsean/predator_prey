@@ -355,7 +355,6 @@ class NeuralNetwork:
             W.append( weights )
             B.append( bias )
 
-        #error = inp[-1] - real_values
         deltas = [ error_values * self.layer_list[-1].get_activation_deriv( inp[-1] ) ]
 
         for layer in reversed(range(self.n_layers)):

@@ -406,135 +406,79 @@ class Prey(Character):
             prev_orientation = self.get_orientation()
             prev_speed       = self.get_speed()
 
-        orientation_change, speed_change = self.interpret_input()
-        #TODO: need to have resistance, consider momentum
-        self.orientation.update(orientation_change*timestep)
+        orientation_change_tanh, speed_change = self.interpret_input()
+
+        orientation_radians = orientation_change_tanh * 2*math.pi
+        delta_orientation = orientation_radians*timestep
+        self.orientation.update(delta_orientation)
+
+        speed_change = 0.0
         self.speed.update(speed_change*timestep)
 
         if ( self.learns ):
 
             eyes = self.eyes
 
-            delta_orientation = (self.get_orientation() - prev_orientation) % (2*math.pi)
             delta_speed = self.get_speed() - prev_speed
+
+            orientation = self.get_orientation()
 
             left_turn = delta_orientation > 0
             right_turn = delta_orientation < 0
-            l_bin, r_bin = eyes.get_left_right_bins( delta_orientation )
-            left_bin_food_source = False
-            right_bin_food_source = False
-            if (
-                (l_bin>0) and
-                (l_bin<self.eyes.n_rays) and
-                (eyes.get_left_eye_values(food_source_name,l_bin) > 0)
-            ):
-                left_bin_food_source = True
-            if (
-                (r_bin>0) and
-                (r_bin<self.eyes.n_rays) and
-                (eyes.get_right_eye_values(food_source_name,r_bin) > 0)
-            ):
-                right_bin_food_source = True
 
-            food_left  = False
-            closest_left_bin = eyes.n_rays
-            closest_left_val = 0
-            for ray in reversed(range(0,closest_left_bin)):
-                this_val = eyes.get_left_eye_value(food_source_name,ray)
-                if (this_val>closest_left_val):
-                    food_left = True
-                    closest_left_bin = ray
-                    closest_left_val = ray
+            expected_heading_angle_l = 0
+            l_sum = 1e-9
+            l_base = eyes.left_ray_angles[0]
 
-            food_right = False
-            closest_right_bin = 0
-            closest_right_val = 0
-            for ray in range(0,eyes.n_rays):
-                this_val = eyes.get_right_eye_value(food_source_name,ray)
-                if (this_val>closest_right_val):
-                    food_right = True
-                    closest_right_bin = ray
-                    closest_right_val = ray
+            expected_heading_angle_r = 0
+            r_sum = 1e-9
+            r_base = eyes.right_ray_angles[0]
 
-            closest_equal = (
-                (closest_left_val == closest_right_val) and
-                (
-                    (closest_right_bin) == (eyes.n_rays-closest_left_bin)
-                )
-            )
-            closest_food_left = (
-                (closest_left_val > closest_right_val) or
-                (
-                    (closest_left_val == closest_right_val) and
+            for ray in range(eyes.n_rays):
+                l_sum += eyes.get_left_eye_values(food_source_name)[ray]
+                l_ori = l_base - eyes.ray_width * ray
+                expected_heading_angle_l += l_ori*eyes.get_left_eye_values(food_source_name)[ray]
+
+                r_sum += eyes.get_right_eye_values(food_source_name)[ray]
+                r_ori = 2*math.pi - (r_base - eyes.ray_width * ray)
+                expected_heading_angle_r += r_ori*eyes.get_right_eye_values(food_source_name)[ray]
+
+            expected_heading_angle_l = expected_heading_angle_l/l_sum
+            expected_heading_angle_r = expected_heading_angle_r/r_sum
+            expected_heading_angle = min(
+                max(
                     (
-                        (closest_right_bin) > (eyes.n_rays-closest_left_bin)
-                    )
-                )
+                        (expected_heading_angle_l * l_sum - expected_heading_angle_r * r_sum ) /
+                        ( l_sum + r_sum )
+                    ),
+                    -2*math.pi * timestep
+                ),
+                2*math.pi * timestep
             )
+
+            food_left  = eyes.left_side_has [food_source_name]
+            food_right = eyes.right_side_has[food_source_name]
 
             orientation_reward = 0.
-            if (
-                # Searching, no food
-                (
-                    not (food_left or food_right) and
-                        (left_turn or right_turn)
-                ) or
-                # Going straight-ish towards food
-                (
-                    ( left_turn and  left_bin_food_source) or
-                    (right_turn and right_bin_food_source)
-                ) or
-                # Turns towards closest
-                (
-                    (closest_equal) or
-                    (food_left  and  left_turn and closest_food_left  ) or
-                    (food_right and right_turn and closest_food_right )
-                )
-            ):
-                orientation_reward = self.food_orientation_reward * delta_orientation / timestep
-            elif (
-                # In food source, can just look around, fewer points
-                (
-                    self.in_food_source
-                )
-            ):
-                orientation_reward = self.food_orientation_reward * delta_orientation / timestep / 2.
-            else:
-                orientation_reward = -self.food_orientation_reward * delta_orientation / timestep
+            orientation_reward = ( delta_orientation - expected_heading_angle ) * self.food_orientation_reward
 
             speed_increase = delta_speed > 0
             speed_decrease = delta_speed < 0
             speed_reward = 0.
-            if (
-                # Searching, no food
-                (
-                    not (food_left or food_right) and
-                        (left_turn or right_turn)
-                ) or
-                # Heading in direction of food
-                (
-                    left_bin_food_source or right_bin_food_source
-                )
-            ):
-                speed_reward = self.food_move_reward * delta_speed / timestep
-
-            else:
-                speed_reward = self.food_move_reward * delta_speed / timestep
-
-            if ( self.in_food_source and not self.prev_in_food_source ):
-                speed_reward += self.food_enter_reward * delta_speed/timestep
-            elif ( not self.in_food_source and self.prev_in_food_source ):
-                speed_reward -= self.food_enter_reward * delta_speed/timestep
-
-            if ( self.in_food_source ):
-                speed_reward += -self.feeds_reward * delta_speed/timestep
 
             input_list = self.get_interpret_vars()
+
             self.brain.backprop(
                 input_list,
-                np.asarray([orientation_reward,speed_reward]),
+                np.array([orientation_reward,speed_reward]),
                 self.learning_rate()
             )
+
+            #TODO: need to have resistance, consider momentum
+            #orientation_change_tanh = 1
+            #if (random.random()<0.01):
+            #    print("Kick")
+            #    self.orientation.value = random.random()*math.pi
 
     def get_interpret_vars(self):
         input_list = []
@@ -584,25 +528,33 @@ class Prey(Character):
     def mutated_value(x,mutation_rate):
         return x * ( 1 + mutation_rate * 2 * ( random.random() - 0.5 ) )
 
+    def mutate_1D_list(inp_list,mutation_rate,allow_const=False):
+        new_list = []
+        if ( allow_const ):
+            prev_val = inp_list[0]
+            for i in range(0,len(inp_list)):
+                all_equal = True
+                if (prev_val != inp_list[i]):
+                    all_equal = False
+                    break
+
+            if all_equal:
+                new_val = Prey.mutated_value(prev_val,mutation_rate)
+                for j in range(0,len(inp_list)):
+                    new_list[i].append(new_val)
+
+                return new_val
+
+        for i in range(0,len(inp_list)):
+            new_list.append(Prey.mutated_value(inp_list[i],mutation_rate))
+        return new_list
+
     def mutate_2D_list(weight_bias_list,mutation_rate,allow_const=False):
         new_list = []
         for i in range(0,len(weight_bias_list)):
-            new_list.append([])
-            layer = weight_bias_list[0]
-            prev_val = layer[0]
-            all_equal = True
-            if allow_const:
-                for val in layer[1:]:
-                    if (prev_val != val):
-                        all_equal = False
-                        break
-            if allow_const and all_equal:
-                new_bias = Prey.mutated_value(prev_val,mutation_rate)
-                for j in range(0,len(layer)):
-                    new_list[i].append(new_bias)
-            else:
-                for j in range(0,len(layer)):
-                    new_list[i].append(Prey.mutated_value(layer[j],mutation_rate))
+            new_list.append(
+                Prey.mutate_1D_list(weight_bias_list[i],mutation_rate,allow_const)
+            )
         return new_list
 
     def can_spawn(self,time):
@@ -660,7 +612,7 @@ class Prey(Character):
             brain_biases  = parent_brain.get_biases().copy()
             brain_afs     = parent_brain.get_activation_functions()
 
-            new_brain_biases = Prey.mutate_2D_list(brain_biases,mutation_rate,allow_const=True)
+            new_brain_biases = Prey.mutate_1D_list(brain_biases,mutation_rate,allow_const=True)
 
             new_brain_weights = []
             for layer in brain_weights:

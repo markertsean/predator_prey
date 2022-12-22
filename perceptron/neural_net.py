@@ -332,54 +332,50 @@ class NeuralNetwork:
     def calc(self,x):
         return self.calc_each_layer_value(x)[-1]
 
-    def backprop(self,input_values,errors,learning_rate):
-        assert isinstance(errors,np.ndarray)
-        assert errors.shape[0]==self.layer_list[-1].get_layer_size()
+    # Error values: default pred_vals - true_vals
+    def backprop(self,input_values,error_values,learning_rate):
+        if (isinstance(input_values,list)):
+            input_values = np.array(input_values)
+        assert isinstance(input_values,np.ndarray)
+        if (isinstance(error_values,list)):
+            error_values = np.array(error_values)
+        assert isinstance(error_values,np.ndarray)
+        assert input_values.shape[0]==self.get_n_inputs()
 
-        all_layer_values = self.calc_each_layer_value(input_values)
-        final_values = all_layer_values[-1]
+        inp = [ np.atleast_2d(input_values) ]
+        for layer in self.calc_each_layer_value(input_values):
+            inp.append( np.atleast_2d(layer) )
 
-        this_layer_error = errors
-        all_errors = []
+        W   = []
+        B   = []
+        for layer in range(len(self.get_weights())):
+            layer_weights = self.get_weights()[layer]
+            bias = self.get_biases()[layer]
+            weights = np.atleast_2d(layer_weights)
+            W.append( weights )
+            B.append( bias )
 
-        for i in reversed(range(0,self.n_layers)):
-            layer = self.layer_list[i]
-            new_errors = []
+        #error = inp[-1] - real_values
+        deltas = [ error_values * self.layer_list[-1].get_activation_deriv( inp[-1] ) ]
 
-            if ( i != self.n_layers-1 ):
-                for j in range(0,layer.layer_size):
-                    error = 0.0
-                    for k in range(0,self.layer_list[i+1].layer_size):
-                        neuron = self.layer_list[i+1].get_neurons()[k]
-                        error += (
-                            neuron.get_weights()[j] * this_layer_error[k]
-                        )
-                    new_errors.append(error)
-            else:
-                for j in range(0,layer.get_layer_size()):
-                    neuron = layer.get_neurons()[j]
-                    new_errors.append(
-                        this_layer_error[j] * layer.get_activation_deriv(
-                            final_values[j]
-                        )
-                    )
-            this_layer_error = new_errors
-            all_errors.append(this_layer_error)
+        for layer in reversed(range(self.n_layers)):
+            dw = deltas[-1].dot(W[layer])
+            dw = dw * self.layer_list[layer].get_activation_deriv( inp[layer] )
+            deltas.append(dw)
+        deltas = deltas[::-1]
 
-        all_errors = all_errors[::-1]
+        for layer in range(self.n_layers):
+            W[layer] -= learning_rate * ( (deltas[layer+1].T).dot(inp[layer]) )
+            B[layer] -= learning_rate * ( np.average(deltas[layer+1]) )
 
-        inputs = input_values
-        for i in reversed(range(0,self.n_layers)):
-            if ( i != 0 ):
-                inputs = all_layer_values[i-1]
+        for layer in range(self.n_layers):
+            new_b = B[layer]
+            new_w = W[layer]
 
-            for j in range(0,self.layer_list[i].get_layer_size()):
-                neuron = self.layer_list[i].get_neurons()[j]
-                weights = neuron.get_weights()
-                for k in range(0,len(inputs)):
-                    weights[k] -= learning_rate * all_errors[i][j] * inputs[k]
-                neuron.set_weights(weights)
-
-                self.layer_list[i].set_bias(
-                    self.layer_list[i].get_bias() - learning_rate * all_errors[i][j]
-                )
+            self.layer_list[layer] = Layer(
+                n_inputs             = self.layer_list[layer].get_n_inputs(),
+                layer_size           = self.layer_list[layer].get_layer_size(),
+                weights              = new_w,
+                bias                 = new_b,
+                activation_functions = self.layer_list[layer].af,
+            )

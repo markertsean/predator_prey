@@ -328,7 +328,7 @@ class Visualizer:
 
 
 def generate_food_source_scatter_df(char_dict,static_dict):
-    fs_df = char_dict['food source'].drop(columns=['time']).drop_duplicates()
+    fs_df = char_dict['food_source'].drop(columns=['time']).drop_duplicates()
     id_list = fs_df['id'].unique()
     rad_list = []
     size_list = []

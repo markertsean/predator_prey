@@ -10,27 +10,30 @@ sys.path.append(os.getcwd() + '/')
 import simulator.simulator as simulator
 import characters.characters as characters
 import characters.parameters as parameters
-import simulation_cfg
-import character_cfg
+import settings.config as cfg
 
-def initialize_characters_homogenous_isotropic(initialize_dict,inp_box,char_dict):
-    for key in initialize_dict:
-        name, count, size, obj = initialize_dict[key]
-        for i in range(0,int(count)):
-            if (name == 'food source'):
+def initialize_characters_homogenous_isotropic(inp_box,inp_char_dict):
+    character_class_dict = {
+        'food_source': characters.FoodSource,
+        'prey': characters.Prey,
+    }
+    for name in inp_char_dict:
+        char_dict = inp_char_dict[name]
+        for i in range(char_dict['n']):
+            if (name == 'food_source'):
                 inp_box.embed(
-                    obj(
+                    character_class_dict[name](
                         inp_box.get_param('length')*random.random(),
                         inp_box.get_param('length')*random.random(),
-                        size,
+                        char_dict['size'],
                     )
                 )
             else:
                 inp_box.embed(
-                    obj(
+                    character_class_dict[name](
                         inp_box.get_param('length')*random.random(),
                         inp_box.get_param('length')*random.random(),
-                        size,
+                        char_dict['size'],
                         parameters.Speed(
                             inp_box.get_param('max_speed') * 0.1,
                             inp_box.get_param('max_speed')
@@ -45,13 +48,14 @@ def save_setup_logfile( sim_parameters, char_parameters, input_box ):
     with open(input_box.get_param('output_path')+fn,'w') as f:
         for key in sim_parameters:
             f.write("{}:{}\n".format(key,sim_parameters[key]))
-        for key in char_parameters:
-            f.write("{}:{}\n".format(key,char_parameters[key]))
+        for char in char_parameters:
+            for key in char_parameters[char]:
+                f.write("{}_{}:{}\n".format(char,key,char_parameters[char][key]))
     print("Wrote "+input_box.get_param('output_path')+fn)
 
 def main():
-    simulation_parameters = simulation_cfg.parameters
-    character_parameters  = character_cfg.parameters
+    simulation_parameters = cfg.simulation_params
+    character_parameters  = cfg.character_parameters
 
     box = simulator.SimulationBox(
         simulation_parameters['box_size'],
@@ -69,21 +73,7 @@ def main():
 
     save_setup_logfile( simulation_parameters, character_parameters, box )
 
-    initialize_dict = {}
-    initialize_dict['food'] = (
-        'food source',
-        character_parameters['n_food'],
-        character_parameters['food_size'],
-        characters.FoodSource
-    )
-    initialize_dict['prey'] = (
-        'prey',
-        character_parameters['n_prey'],
-        character_parameters['prey_size'],
-        characters.Prey
-    )
-    
-    initialize_characters_homogenous_isotropic(initialize_dict,box,character_parameters)
+    initialize_characters_homogenous_isotropic(box,character_parameters)
 
     box.run_simulation()
 

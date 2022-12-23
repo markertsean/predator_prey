@@ -219,7 +219,7 @@ class FoodSource(Character):
         self.y    = y_init
         self.size = size
         self.radius = self.size/2.
-        self.name = 'food source'
+        self.name = 'food_source'
         self.consumed=False
 
     def get_name(self):
@@ -252,12 +252,12 @@ class Prey(Character):
 
         brain_param_dict = {}
 
-        if (self.check_param('prey_age',params)):
+        if (self.check_param('age',params)):
             self.has_age=True
             self.age = parameters.CharacterParameter(
                 name='age',
                 minval=0.0,
-                maxval=params['prey_age_max'],
+                maxval=params['age_max'],
                 value =0.0,
             )
             #TODO: Add to brain somehow
@@ -266,14 +266,14 @@ class Prey(Character):
             self.has_age=False
             self.age = None
 
-        if (self.check_param('prey_energy',params)):
+        if (self.check_param('energy',params)):
             self.has_energy=True
             self.energy = parameters.Energy(
                 minval                 = 0.0,
-                maxval                 = params['prey_energy_max'],
-                value                  = params['prey_energy_max'],
-                energy_speed_decrement = params['prey_energy_speed_delta'],
-                energy_time_decrement  = params['prey_energy_time_delta'],
+                maxval                 = params['energy_max'],
+                value                  = params['energy_max'],
+                energy_speed_decrement = params['energy_speed_delta'],
+                energy_time_decrement  = params['energy_time_delta'],
             )
             #TODO: Add to brain somehow
             #brain_param_dict['energy'] = self.energy.get_value
@@ -281,22 +281,22 @@ class Prey(Character):
             self.has_energy=False
             self.energy = None
 
-        if (self.check_param('prey_needs_food',params)):
+        if (self.check_param('needs_food',params)):
             self.eats = True
-            self.food_source = 'food source'
+            self.food_source = 'food_source'
             self.prev_in_food_source = False
             self.in_food_source = False
         else:
             self.eats = False
             self.food_source = None
 
-        if (self.check_param('prey_vision',params)):
+        if (self.check_param('vision',params)):
             self.vision = True
             self.eyes = parameters.VisionObj(
-                params['prey_eye_offset'],
-                params['prey_eye_fov'],
-                params['prey_eye_dist'],
-                params['prey_eye_rays']
+                params['eye_offset'],
+                params['eye_fov'],
+                params['eye_dist'],
+                params['eye_rays']
             )
 
             for obj in self.eyes.get_param("possible_objects"):
@@ -314,51 +314,54 @@ class Prey(Character):
             self.vision=False
             self.eyes=None
 
-        if (self.check_param('prey_brain',params)):
+        if (self.check_param('brain',params)):
             self.interprets = True
             self.brain_param_dict = brain_param_dict
             self.brain_order = self.brain_param_dict.keys()
 
-            self.brain_mutation_min  = params['prey_mutation_floor']
-            self.brain_mutation_max  = params['prey_mutation_max']
-            self.brain_mutation_half = params['prey_mutation_halflife']
+            self.brain_mutation_min  = params['mutation_floor']
+            self.brain_mutation_max  = params['mutation_max']
+            self.brain_mutation_half = params['mutation_halflife']
 
             self.brain = NN.NeuralNetwork(
                 n_inputs_init        = len(self.brain_order),
-                layer_sizes          = params['prey_brain_layers'],
-                weights              = params['prey_brain_weights'],
-                biases               = params['prey_brain_biases'],
-                activation_functions = params['prey_brain_AF'],
+                layer_sizes          = params['brain_layers'],
+                weights              = params['brain_weights'],
+                biases               = params['brain_biases'],
+                activation_functions = params['brain_AF'],
             )
         else:
             self.interprets = False
             self.brain = None
 
-        if (self.interprets and self.vision and self.eats and self.check_param('prey_learns',params)):
+        if (
+            self.interprets and self.has_age and self.has_energy and
+            self.vision and self.eats and self.check_param('learns',params)
+        ):
             self.learns = True
-            self.food_orientation_reward = abs(params['prey_food_source_orientation_reward'] )
-            self.food_move_reward        = abs(params['prey_food_source_move_reward'] )
-            self.food_enter_reward       = abs(params['prey_food_source_enter_reward'] )
-            self.feeds_reward            = abs(params['prey_feeds_reward'] )
-            self.learning_max            = params['prey_learning_max']
-            self.learning_min            = params['prey_learning_floor']
-            self.learning_halflife       = params['prey_learning_halflife']
+            self.food_orientation_reward = abs(params['food_source_orientation_reward'] )
+            self.food_move_reward        = abs(params['food_source_move_reward'] )
+            self.food_enter_reward       = abs(params['food_source_enter_reward'] )
+            self.feeds_reward            = abs(params['feeds_reward'] )
+            self.learning_max            = params['learning_max']
+            self.learning_min            = params['learning_floor']
+            self.learning_halflife       = params['learning_halflife']
         else:
             self.learns = False
             self.learning_max = None
             self.learning_min = None
 
         #TODO: implement proba
-        if (self.check_param('prey_spawns_fixed',params) or self.check_param('prey_spawns_proba',params)):
+        if (self.check_param('spawns_fixed',params) or self.check_param('spawns_proba',params)):
             self.reproduces   = True
             self.spawn_last_t = 0.0
             self.spawn_adult  = False
-            self.spawn_delay        = params['prey_new_spawn_delay']
-            self.spawn_energy_min   = params['prey_spawn_energy_min']
-            self.spawn_energy_delta = params['prey_spawn_energy_delta']
+            self.spawn_delay        = params['new_spawn_delay']
+            self.spawn_energy_min   = params['spawn_energy_min']
+            self.spawn_energy_delta = params['spawn_energy_delta']
 
             # Fixed
-            self.spawn_fixed_time_min = params['prey_spawn_time_fixed']
+            self.spawn_fixed_time_min = params['spawn_time_fixed']
         else:
             self.reproduces = False
             self.spawn_last_t = None
@@ -394,14 +397,15 @@ class Prey(Character):
     def eat(self):
         self.prev_in_food_source = self.in_food_source
         self.in_food_source = True
-        self.energy.value = self.energy.get_param('max')
+        if ( self.has_energy ):
+            self.energy.value = self.energy.get_param('max')
 
     def not_eat(self):
         self.prev_in_food_source = self.in_food_source
         self.in_food_source = False
 
     def act(self,timestep):
-        food_source_name = "food source"
+        food_source_name = "food_source"
         if ( self.learns ):
             prev_orientation = self.get_orientation()
             prev_speed       = self.get_speed()

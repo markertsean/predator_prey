@@ -177,7 +177,7 @@ class VisionObj:
         max_sight_dist,
         n_rays,
         objs_to_see = [
-            'food source',
+            'food_source',
             #TODO: remove
             #'prey',
         ],

@@ -191,15 +191,15 @@ def plot_go(inp_df,setup_params):
 
 def main():
     project_path = '/'.join(os.getcwd().split('/'))+'/'
-    data_path = project_path + 'data/'
+    data_path = project_path + 'data/character_snapshots/'
 
     input_version = 'latest'
     if (input_version=='latest'):
         input_version = sorted(os.listdir(data_path))[-1]
-    input_base_path = data_path + input_version + '/'
-    input_snap_path = input_base_path + 'character_snapshots/'
+    input_log_path  = data_path + 'logfiles/'            + input_version + '/'
+    input_snap_path = data_path + 'character_snapshots/' + input_version + '/'
 
-    setup_params = read_setup(input_base_path)
+    setup_params = read_setup(input_log_path)
     #position_df  = read_simple(input_snap_path,setup_params)
     character_df_dict, static_dict  = read_character(input_snap_path,setup_params)
 

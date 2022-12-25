@@ -6,7 +6,7 @@ import os
 sys.path.append(os.getcwd() + '/')
 
 simulation_params = {
-    'max_steps':       int(1e1)
+    'max_steps':        int(1e2)
     ,'time_step':           1e-1
     ,'snapshot_step':   int(1e0)
     
@@ -67,7 +67,7 @@ prey_params = {
     ,'mutation_floor':1e-2
     ,'mutation_halflife':1e1 # generations
 
-    ,'learns': True
+    ,'learns': False
     ,'food_source_orientation_reward':1.0
     ,'food_source_move_reward':0.3
     ,'food_source_enter_reward':1.0
@@ -75,6 +75,13 @@ prey_params = {
     ,'learning_max':1e-1
     ,'learning_floor':1e-2
     ,'learning_halflife':5.0 # age units
+
+    ,'save_brains': False
+    ,'brain_output_version': "test"
+    ,'brain_output_version_date': True
+
+    ,'load_brains': True
+    ,'brain_input_version': "latest"
 }
 
 character_parameters = {

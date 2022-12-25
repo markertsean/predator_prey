@@ -85,7 +85,8 @@ class SimulationBox:
         self.parallel_char_min = parallel_char_min
 
         assert isinstance(output_path,str)
-        self.output_path = output_path + datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
+        self.output_path = output_path
+        self.output_version = datetime.today().strftime('%Y.%m.%d.%H.%M.%S') + '/'
 
         self.cell_dict = self.__generate_blank_cell_dict__()
 
@@ -504,7 +505,7 @@ class SimulationBox:
         return something_changed
 
     def generate_snapshots(self):
-        output_path = self.output_path + 'character_snapshots/'
+        output_path = self.output_path + 'character_snapshots/' + self.output_version
         os.makedirs(output_path,exist_ok=True)
 
         output_fn = 'character_snapshot_{:09d}.pkl'.format(self.current_step)

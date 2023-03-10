@@ -32,7 +32,7 @@ def get_character_params():
                 params['brain_output_version_date']
             )
             assert not os.path.exists(path), "Brain path {} already exists!".format(path)
-            os.mkdir(path)
+            os.makedirs(path)
     return config.character_parameters
 
 def save_char_brains(box_cell_dict,char_name,char_dict):

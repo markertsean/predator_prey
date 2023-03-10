@@ -35,11 +35,14 @@ def initialize_characters_homogenous_isotropic(inp_box,inp_char_dict):
         char_dict = inp_char_dict[name]
         embed_list = []
 
+        print(char_dict.keys())
+
         brain_list = None
         if (
             ('load_brains' in char_dict) and
             char_dict['load_brains']
         ):
+            print("IN BRAINS")
             brain_list = slp.load_char_brains(name,char_dict['brain_input_version'])
 
         for i in range(char_dict['n']):

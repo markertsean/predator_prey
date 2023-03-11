@@ -6,6 +6,7 @@ import sys
 sys.path.append(os.getcwd() + '/')
 
 from settings import config
+from perceptron import complex_brain
 
 current_date = datetime.today().strftime('%Y.%m.%d.%H.%M.%S')
 
@@ -74,3 +75,37 @@ def load_char_brains(char_name,brain_version):
     with open( inp_path, 'rb' ) as f:
         brain_list=pkl.load(f)
     return brain_list
+
+def get_val_from_dict(name,this_dict):
+    val_dict = {}
+    for key in this_dict:
+        if name in key:
+            val_dict[key] = this_dict[key]
+    assert val_dict is not {}, name + " not present in param dict"
+    return val_dict
+
+def iter_complex_brain_struct( new_item, param_dict ):
+    brain_order = []
+    brain_dict = {}
+
+    if isinstance( new_item, int ):
+        return new_item, {}
+    elif isinstance( new_item, str ):
+        return new_item, get_val_from_dict( new_item, param_dict )
+    
+    elif isinstance( new_item, tuple ):
+        name, inp_path = new_item
+        with open( inp_path, 'rb' ) as f:
+            brain = pkl.load(f)
+        return name, get_val_from_dict( name, param_dict )
+       
+    elif isinstance( new_item, list ):
+        for item in new_item:
+            name, val_dict = iter_complex_brain_struct( item, param_dict )
+            brain_dict.update(val_dict)
+            brain_order.append(name)
+
+    return brain_order, brain_dict
+
+def load_complex_brains( brain_structure, brain_param_dict ):
+    return iter_complex_brain_struct(brain_structure,brain_param_dict)

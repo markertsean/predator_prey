@@ -1,5 +1,6 @@
 from datetime import datetime
 import pickle as pkl
+import random
 import os
 import sys
 
@@ -7,6 +8,7 @@ sys.path.append(os.getcwd() + '/')
 
 from settings import config
 from perceptron import complex_brain
+from perceptron import neural_net
 
 current_date = datetime.today().strftime('%Y.%m.%d.%H.%M.%S')
 
@@ -84,28 +86,44 @@ def get_val_from_dict(name,this_dict):
     assert val_dict is not {}, name + " not present in param dict"
     return val_dict
 
+loaded_brain_list = None
 def iter_complex_brain_struct( new_item, param_dict ):
     brain_order = []
+    brain_objs = []
     brain_dict = {}
 
-    if isinstance( new_item, int ):
-        return new_item, {}
-    elif isinstance( new_item, str ):
-        return new_item, get_val_from_dict( new_item, param_dict )
+    if isinstance( new_item, str ):
+        return new_item, new_item, get_val_from_dict( new_item, param_dict )
     
     elif isinstance( new_item, tuple ):
         name, inp_path = new_item
-        with open( inp_path, 'rb' ) as f:
-            brain = pkl.load(f)
-        return name, get_val_from_dict( name, param_dict )
-       
+
+        global loaded_brain_list
+        if (loaded_brain_list is None):
+            loaded_brain_list = []
+            with open( inp_path, 'rb' ) as f:
+                brain_list = pkl.load(f)
+            for brain in brain_list:
+                n,l,w,b,af,od = brain
+                loaded_brain_list.append(
+                    {
+                        "NN":neural_net.NeuralNetwork(
+                            n,l,w,b,af
+                        ),
+                        "order":od,
+                    }
+                )
+        select_dict = random.choice(loaded_brain_list)
+        return name, select_dict['NN'], { name: select_dict['order'] }
+
     elif isinstance( new_item, list ):
         for item in new_item:
-            name, val_dict = iter_complex_brain_struct( item, param_dict )
+            name, objects, val_dict = iter_complex_brain_struct( item, param_dict )
             brain_dict.update(val_dict)
             brain_order.append(name)
+            brain_objs.append(objects)
 
-    return brain_order, brain_dict
+    return brain_order, brain_objs, brain_dict
 
 def load_complex_brains( brain_structure, brain_param_dict ):
     return iter_complex_brain_struct(brain_structure,brain_param_dict)

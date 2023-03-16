@@ -56,6 +56,23 @@ prey_params = {
     ,'brain_biases':None
     ,'brain_AF':[AF.relu,AF.tanh]
 
+    ,'complex_brain': True
+    ,'complex_brain_input_structure': [
+        'age',
+        'energy',
+        ('eyes_food_source','data/brains/test_2023.03.10.13.11.50/prey.pkl',),
+    ]
+    ,'complex_brain_nn_structure': [
+        5,
+        5,
+        2
+    ]
+    ,'complex_brain_variables':[
+        'age',
+        'energy',
+        'eyes_food_source',
+    ]
+
     ,'spawns_fixed': True
     ,'spawn_time_fixed': 5.0
     ,'spawns_proba': False
@@ -80,7 +97,7 @@ prey_params = {
     ,'brain_output_version': "test"
     ,'brain_output_version_date': True
 
-    ,'load_brains': True
+    ,'load_brains': False
     ,'brain_input_version': "latest"
 }
 

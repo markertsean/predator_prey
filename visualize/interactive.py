@@ -47,7 +47,7 @@ class CharMarker(glyphs.Circle):
         pass
 
 class Visualizer:
-    def __init__(self,simulation_params,food_source_obj_df,prey_obj_df,static_dict,brain_dict,max_time=None):
+    def __init__(self,simulation_params,food_source_obj_df,prey_pred_obj_df,static_dict,brain_dict,max_time=None):
         self.play_button = Button(label="Play")
         self.callback = None
 
@@ -71,8 +71,11 @@ class Visualizer:
 
         self.food_source_bokeh_input = ColumnDataSource(food_source_obj_df)
 
-        self.prey_df = prey_obj_df.copy()
-        self.prey_iter_df = self.prey_df.loc[self.prey_df['time']==self.current_time]
+        colors =  {'prey': (100,255,100),'predator': (255,100,100)}
+        self.prey_df = prey_pred_obj_df.copy()
+        self.prey_df["color"] = self.prey_df["name"].apply(lambda c: colors[c])
+
+        self.prey_iter_df = self.prey_df.loc[self.prey_df['time']==self.current_time].copy()
 
         my_tools = 'pan,wheel_zoom,zoom_in,zoom_out,box_zoom,reset,tap'
         self.fig = figure( title="Box", x_axis_label="x", y_axis_label="y", sizing_mode='scale_height', tools=my_tools)
@@ -91,7 +94,7 @@ class Visualizer:
             line_alpha = 0.0
         )
 
-        self.prey_data_cols = ['id','x','y','speed','orientation','radius']
+        self.prey_data_cols = ['id','x','y','speed','orientation','radius','color']
         self.prey_fig = self.fig.circle(
             source=ColumnDataSource(
                 self.prey_iter_df[self.prey_data_cols]
@@ -100,7 +103,7 @@ class Visualizer:
             y='y',
             radius_units='data',
             radius='radius',
-            fill_color = (100,255,100),
+            fill_color = 'color',
             fill_alpha = 1.0,
             line_alpha = 0.0
         )
@@ -359,6 +362,8 @@ def generate_food_source_recursive_boundaries(char_dict,static_dict):
     return pd.concat(df_list)
 
 def generate_active_char_scatter_df(name,char_dict,static_dict,time_step):
+    if name not in char_dict:
+        return None, None
     char_df = char_dict[name]
     copy_fields = []
     new_df = pd.DataFrame(char_df['id'].copy())
@@ -439,12 +444,20 @@ def output_static_plot(char_dict,static_dict):
 
 def animate_plot(simulation_params,char_dict,static_dict,max_time):
     food_source_df = generate_food_source_recursive_boundaries(char_dict, static_dict)
-    prey_time_df, brain_dict = generate_active_char_scatter_df('prey',char_dict,static_dict,simulation_params['time_step'])
+    time_dfs = []
+    brain_dicts = {}
+    for pp in ['prey','predator']:
+        p_time_df, brain_dict = generate_active_char_scatter_df(pp,char_dict,static_dict,simulation_params['time_step'])
+        if ( p_time_df is not None ):
+            time_dfs.append( p_time_df )
+            brain_dicts.update( brain_dict )
+
+    time_df = pd.concat( time_dfs )
 
     my_visualizer = Visualizer(
         simulation_params,
         food_source_df,
-        prey_time_df,
+        time_df,
         static_dict,
         brain_dict,
         max_time = max_time

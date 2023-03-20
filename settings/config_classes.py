@@ -17,6 +17,7 @@ class char_config:
 
             ,'needs_food': False
             ,'food_source': None
+            ,'food_of': None
 
             ,'vision': False
             ,'eye_offset': 60 * math.pi / 180

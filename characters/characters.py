@@ -291,6 +291,9 @@ class Prey(Character):
             self.has_energy=False
             self.energy = None
 
+        if (self.check_param('food_of',params)):
+            self.food_of = params['food_of']
+
         if (self.check_param('needs_food',params)):
             self.eats = True
             self.food_source = 'food_source'
@@ -800,3 +803,7 @@ class Prey(Character):
             return_list.append(('brain_field_order'         ,list(self.brain_order)               ))
 
         return return_list
+
+class Predator(Prey):
+    def get_name(self):
+        return 'predator'

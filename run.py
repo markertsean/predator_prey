@@ -30,6 +30,7 @@ def initialize_characters_homogenous_isotropic(inp_box,inp_char_dict):
     character_class_dict = {
         'food_source': characters.FoodSource,
         'prey': characters.Prey,
+        'predator': characters.Predator,
     }
     for name in inp_char_dict:
         char_dict = inp_char_dict[name]

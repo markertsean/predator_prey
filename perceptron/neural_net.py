@@ -327,7 +327,7 @@ class NeuralNetwork:
 
     def calc_partial(self,x,n):
         assert n < self.n_layers
-        return calc_each_layer_value(x)[n]
+        return self.calc_each_layer_value(x)[n]
 
     def calc(self,x):
         return self.calc_each_layer_value(x)[-1]

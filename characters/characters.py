@@ -7,8 +7,10 @@ import copy
 
 sys.path.append('/'.join( __file__.split('/')[:-2] )+'/')
 
+from settings import save_load_params
 import characters.parameters as parameters
 import perceptron.neural_net as NN
+import perceptron.complex_brain as CB
 
 class Character:
     id_num = 0
@@ -260,8 +262,12 @@ class Prey(Character):
                 maxval=params['age_max'],
                 value =0.0,
             )
-            #TODO: Add to brain somehow
-            #brain_param_dict['age'] = self.age.get_value
+            if (
+                self.check_param('complex_brain',params) and
+                self.check_param('complex_brain_variables',params) and
+                ( 'age' in params['complex_brain_variables'] )
+            ):
+                brain_param_dict['age'] = self.age.get_value
         else:
             self.has_age=False
             self.age = None
@@ -275,8 +281,12 @@ class Prey(Character):
                 energy_speed_decrement = params['energy_speed_delta'],
                 energy_time_decrement  = params['energy_time_delta'],
             )
-            #TODO: Add to brain somehow
-            #brain_param_dict['energy'] = self.energy.get_value
+            if (
+                self.check_param('complex_brain',params) and
+                self.check_param('complex_brain_variables',params) and
+                ( 'energy' in params['complex_brain_variables'] )
+            ):
+                brain_param_dict['energy'] = self.energy.get_value
         else:
             self.has_energy=False
             self.energy = None
@@ -286,6 +296,7 @@ class Prey(Character):
             self.food_source = 'food_source'
             self.prev_in_food_source = False
             self.in_food_source = False
+            # TODO: Implement in complex brain
         else:
             self.eats = False
             self.food_source = None
@@ -302,19 +313,50 @@ class Prey(Character):
             for obj in self.eyes.get_param("possible_objects"):
                 obj_name = '_'.join(obj.split(' '))
 
+                if (
+                    self.check_param('complex_brain',params) and
+                    self.check_param('complex_brain_variables',params) and
+                    ( 'eyes_'+obj_name in params['complex_brain_variables'] )
+                ):
+                    brain_param_dict['eyes_'+obj_name] = []
+
                 raynum = 0
                 for i in range(0,self.eyes.get_param('n_rays')):
-                    brain_param_dict['eye_ray_value_'+obj_name+"_"+str(raynum)] = (self.eyes.get_left_eye_value ,obj, i)
+                    varname = 'eye_ray_value_'+obj_name+"_"+str(raynum)
+                    brain_param_dict[varname] = (self.eyes.get_left_eye_value ,obj, i)
+
+                    if (
+                        self.check_param('complex_brain',params) and
+                        self.check_param('complex_brain_variables',params) and
+                        ( 'eyes_'+obj_name in params['complex_brain_variables'] )
+                    ):
+                        brain_param_dict['eyes_'+obj_name].append( (self.eyes.get_left_eye_value ,obj, i) )
+
                     raynum += 1
 
                 for i in range(0,self.eyes.get_param('n_rays')):
-                    brain_param_dict['eye_ray_value_'+obj_name+"_"+str(raynum)] = (self.eyes.get_right_eye_value ,obj, i)
+                    varname = 'eye_ray_value_'+obj_name+"_"+str(raynum)
+
+                    brain_param_dict[varname] = (self.eyes.get_right_eye_value ,obj, i)
+
+                    if (
+                        self.check_param('complex_brain',params) and
+                        self.check_param('complex_brain_variables',params) and
+                        ( 'eyes_'+obj_name in params['complex_brain_variables'] )
+                    ):
+                        brain_param_dict['eyes_'+obj_name].append( (self.eyes.get_right_eye_value ,obj, i) )
+
                     raynum += 1
+
+
         else:
             self.vision=False
             self.eyes=None
 
-        if (self.check_param('brain',params)):
+        if (
+            self.check_param('brain',params) or
+            self.check_param('complex_brain',params)
+        ):
             self.interprets = True
             self.brain_param_dict = brain_param_dict
             self.brain_order = self.brain_param_dict.keys()
@@ -323,13 +365,38 @@ class Prey(Character):
             self.brain_mutation_max  = params['mutation_max']
             self.brain_mutation_half = params['mutation_halflife']
 
-            self.brain = NN.NeuralNetwork(
-                n_inputs_init        = len(self.brain_order),
-                layer_sizes          = params['brain_layers'],
-                weights              = params['brain_weights'],
-                biases               = params['brain_biases'],
-                activation_functions = params['brain_AF'],
-            )
+            if ( self.check_param('complex_brain',params) ):
+                brain_struct, brain_objs, brain_dict = save_load_params.load_complex_brains(
+                    params['complex_brain_input_structure'],
+                    self.brain_param_dict
+                )
+                self.brain_order = brain_struct
+
+                for key in brain_dict:
+                    if ( isinstance(brain_dict[key], list) ):
+                        for i in range(0,len(brain_dict[key])):
+                            name = brain_dict[key][i]
+                            if ( isinstance(name,str) and
+                                ( name in brain_param_dict )
+                            ):
+                                brain_dict[key][i] = brain_param_dict[name]
+
+                self.brain_param_dict = brain_dict
+                self.brain = CB.ComplexBrain(
+                    self.brain_order,
+                    brain_objs,
+                    self.brain_param_dict,
+                    params['complex_brain_nn_structure'],
+                    input_net_cutoffs=-2
+                )
+            else:
+                self.brain = NN.NeuralNetwork(
+                    n_inputs_init        = len(self.brain_order),
+                    layer_sizes          = params['brain_layers'],
+                    weights              = params['brain_weights'],
+                    biases               = params['brain_biases'],
+                    activation_functions = params['brain_AF'],
+                )
         else:
             self.interprets = False
             self.brain = None
@@ -484,36 +551,54 @@ class Prey(Character):
             else:
                 speed_reward = self.food_move_reward * delta_speed
 
-            input_list = self.get_interpret_vars()
+            if ( isinstance(self.brain,NN.NeuralNetwork) ):
+                input_list = self.get_interpret_vars()
 
-            self.brain.backprop(
-                input_list,
-                np.array([orientation_reward,speed_reward]),
-                self.learning_rate()
-            )
+                self.brain.backprop(
+                    input_list,
+                    np.array([orientation_reward,speed_reward]),
+                    self.learning_rate()
+                )
+            # Complex brain calculates input from functions
+            else:
+                self.brain.backprop(
+                    np.array([orientation_reward,speed_reward]),
+                    self.learning_rate()
+                )
+
+    def unpack_interpret_vars(self,value):
+        if ( isinstance( value, list ) ):
+            return_list = []
+            for v in value:
+                return_list.append( self.unpack_interpret_vars( v ) )
+            return return_list
+        elif ( isinstance( value, tuple ) ):
+            list_op = list(value)
+            op = list_op.pop(0)
+            tup_op = tuple(list_op)
+            return [ op( *tup_op ) ]
+        else:
+            return [ value ]
 
     def get_interpret_vars(self):
         input_list = []
         for key in self.brain_order:
             var_name = key
-            value = 0
-            if ( isinstance(self.brain_param_dict[key], tuple ) ):
-                func, name, i = self.brain_param_dict[key]
-                value = func(name,i)
-            else:
-                value = self.brain_param_dict[key]()
-
-            input_list.append( value )
-
+            input_list +=  self.unpack_interpret_vars( self.brain_param_dict[key] )
         return input_list
 
     def interpret_input(self):
         if (not self.interprets):
             return None
 
-        input_list = self.get_interpret_vars()
+        brain_results = None
+        if ( isinstance(self.brain,NN.NeuralNetwork) ):
+            input_list = self.get_interpret_vars()
 
-        return self.brain.calc(input_list)
+            brain_results = self.brain.calc(input_list)
+        else:
+            brain_results = self.brain.calc()
+        return brain_results
 
     def learning_rate(self):
         if ((self.learning_min is None) or (self.learning_max is None)):
@@ -630,7 +715,7 @@ class Prey(Character):
             for layer in brain_weights:
                 new_brain_weights.append(Prey.mutate_2D_list(layer,mutation_rate,allow_const=True))
 
-            mutated_brain = NN.NeuralNetwork(
+            mutated_network = NN.NeuralNetwork(
                 brain_inputs,
                 brain_layers,
                 new_brain_weights,
@@ -638,7 +723,17 @@ class Prey(Character):
                 brain_afs
             )
 
-        child.set_param('brain',mutated_brain)
+            if ( isinstance(self.brain,NN.NeuralNetwork) ):
+                child.set_param('brain',mutated_network)
+            else:
+                '''
+                Initial brain will have child inputs, randomly selected
+                NN's for operation layer, randomly set NN.
+                Need to inherit from parent.
+                '''
+                child.brain.set_operations( parent_brain.get_operations() )
+                child.brain.set_NN( mutated_network )
+
         child.set_param('generation',child.get_param('generation')+1)
         return child
 

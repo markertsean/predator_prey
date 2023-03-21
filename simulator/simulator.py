@@ -565,7 +565,7 @@ class SimulationBox:
                 hours, remainder = divmod(s, 3600)
                 minutes, seconds = divmod(remainder, 60)
                 print(
-                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:03.1f}, characters = {:06d}".format(
+                    "Finished step {:09d}, time from last = {:4.1f} s, total time = {:02d}:{:02d}:{:04.1f}, characters = {:06d}".format(
                         self.current_step,
                         (now-prev_time).total_seconds(),
                         int(hours),

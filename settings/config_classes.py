@@ -62,6 +62,10 @@ class char_config:
             ,'learns': False
             ,'food_source_orientation_reward':1.0
             ,'food_source_move_reward':0.3
+            ,'self_orientation_reward':1.0
+            ,'self_move_reward':0.3
+            ,'predator_prey_orientation_reward':1.0
+            ,'predator_prey_move_reward':0.3
             ,'food_source_enter_reward':1.0
             ,'feeds_reward':0.5
             ,'learning_max':1e-1

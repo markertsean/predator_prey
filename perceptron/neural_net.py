@@ -105,6 +105,7 @@ class Layer:
         weights=None,
         bias=None,
         activation_functions=activation.relu,
+        const_layer_offset = 0.01
     ):
         self.af = activation_functions
 
@@ -132,8 +133,9 @@ class Layer:
                     weight_list.append( weight_row )
             else:
                 row = []
+                counter = 1
                 for i in range( 0, self.n_inputs ):
-                    row.append( weights )
+                    row.append( weights + const_layer_offset * counter )
                 weight_row = Neuron.set_array( row, self.n_inputs )
                 for i in range( 0, self.layer_size ):
                     weight_list.append( weight_row )
@@ -218,6 +220,7 @@ class NeuralNetwork:
         weights=None,
         biases=None,
         activation_functions=activation.relu,
+        const_layer_offset = 0.1
     ):
         assert isinstance(n_inputs_init,int)
         self.n_inputs = n_inputs_init
@@ -234,8 +237,11 @@ class NeuralNetwork:
             assert len(weights)==self.n_layers
             layer_weights = weights
         else:
+            # Constant values makes the network useless, implement slight offset
+            counter = 1.
             for i in range(0,self.n_layers):
-                layer_weights.append(weights)
+                layer_weights.append( weights + counter * const_layer_offset )
+                counter += 1
 
         layer_biases = []
         if (biases is not None):
@@ -244,8 +250,11 @@ class NeuralNetwork:
             assert len(biases)==self.n_layers
             layer_biases = biases
         else:
+            # Constant values makes the network useless, implement slight offset
+            counter = 1.
             for i in range(0,self.n_layers):
-                layer_biases.append(biases)
+                layer_biases.append( biases + counter * const_layer_offset )
+                counter += 1
 
         layer_af = []
         if (isinstance(activation_functions,list)):

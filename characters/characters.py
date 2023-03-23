@@ -241,6 +241,7 @@ class FoodSource(Character):
 
 class Prey(Character):
     def get_name(self):
+        self.name = 'prey'
         return 'prey'
 
     def check_param(self,key,param):
@@ -296,7 +297,7 @@ class Prey(Character):
 
         if (self.check_param('needs_food',params)):
             self.eats = True
-            self.food_source = 'food_source'
+            self.food_source = params['food_source']
             self.prev_in_food_source = False
             self.in_food_source = False
             # TODO: Implement in complex brain
@@ -409,10 +410,15 @@ class Prey(Character):
             self.vision and self.eats and self.check_param('learns',params)
         ):
             self.learns = True
-            self.food_orientation_reward = abs(params['food_source_orientation_reward'] )
-            self.food_move_reward        = abs(params['food_source_move_reward'] )
-            self.food_enter_reward       = abs(params['food_source_enter_reward'] )
-            self.feeds_reward            = abs(params['feeds_reward'] )
+            self.food_orientation_reward      = params['food_source_orientation_reward']
+            self.food_move_reward             = params['food_source_move_reward']
+            self.self_orientation_reward      = params['self_orientation_reward']
+            self.self_move_reward             = params['self_move_reward']
+            self.pred_prey_orientation_reward = params['predator_prey_orientation_reward']
+            self.pred_prey_move_reward        = params['predator_prey_move_reward']
+
+            self.food_enter_reward       = params['food_source_enter_reward']
+            self.feeds_reward            = params['feeds_reward']
             self.learning_max            = params['learning_max']
             self.learning_min            = params['learning_floor']
             self.learning_halflife       = params['learning_halflife']
@@ -465,6 +471,8 @@ class Prey(Character):
         return True
 
     def eat(self):
+        if ( not self.eats ):
+            return
         self.prev_in_food_source = self.in_food_source
         self.in_food_source = True
         if ( self.has_energy ):
@@ -474,9 +482,8 @@ class Prey(Character):
         self.prev_in_food_source = self.in_food_source
         self.in_food_source = False
 
-    def learn_food_source(self, attempted_delta_orientation, attempted_delta_speed ):
-        food_source_name = self.food_source
-
+    def learn_food_source(self, source_name, attempted_delta_orientation, attempted_delta_speed ):
+        assert source_name in [self.food_source,self.get_name(),self.food_of]
         eyes = self.eyes
 
         expected_heading_angle_l = 0
@@ -489,14 +496,14 @@ class Prey(Character):
         r_base = eyes.right_ray_angles[0]
 
         for ray in range(eyes.n_rays):
-            l_sum += eyes.get_left_eye_values(food_source_name)[ray]
-            r_sum += eyes.get_right_eye_values(food_source_name)[ray]
+            l_sum += eyes.get_left_eye_values(source_name)[ray]
+            r_sum += eyes.get_right_eye_values(source_name)[ray]
 
             l_ori = l_base - eyes.ray_width * ray
             r_ori = 2*math.pi - (r_base - eyes.ray_width * ray)
 
-            expected_heading_angle_l += l_ori*eyes.get_left_eye_values (food_source_name)[ray]
-            expected_heading_angle_r += r_ori*eyes.get_right_eye_values(food_source_name)[ray]
+            expected_heading_angle_l += l_ori*eyes.get_left_eye_values (source_name)[ray]
+            expected_heading_angle_r += r_ori*eyes.get_right_eye_values(source_name)[ray]
 
         expected_heading_angle_l = expected_heading_angle_l/l_sum
         expected_heading_angle_r = expected_heading_angle_r/r_sum
@@ -505,30 +512,82 @@ class Prey(Character):
             ( l_sum + r_sum )
         )
 
-        food_left  = eyes.left_side_has [food_source_name]
-        food_right = eyes.right_side_has[food_source_name]
-
-        orientation_reward = 0.
-        orientation_reward = ( attempted_delta_orientation - expected_heading_angle ) * self.food_orientation_reward
+        source_left  = eyes.left_side_has [source_name]
+        source_right = eyes.right_side_has[source_name]
 
         l_ray = int( ( attempted_delta_orientation - l_base ) / (-eyes.ray_width) )
         r_ray = int( ( attempted_delta_orientation - r_base ) / (-eyes.ray_width) )
-        delta_ori_has_food = False
+
+        delta_ori_has_source = False
         if (
             ( ( l_ray < eyes.n_rays ) and ( l_ray >= 0 ) ) or
             ( ( r_ray < eyes.n_rays ) and ( r_ray >= 0 ) )
         ):
-            delta_ori_has_food = True
+            delta_ori_has_source = True
 
         speed_increase = attempted_delta_speed > 0
         speed_decrease = attempted_delta_speed < 0
+
+        orientation_reward = 0.
         speed_reward = 0.
-        if ( self.get_speed() == 0 ):
-            speed_reward = -self.food_move_reward
-        elif ( delta_ori_has_food == speed_increase ):
-            speed_reward = -self.food_move_reward * attempted_delta_speed
-        else:
-            speed_reward = self.food_move_reward * attempted_delta_speed
+
+        if ( source_name == self.food_source ):
+
+            orientation_reward = (
+                attempted_delta_orientation - expected_heading_angle
+            ) * self.food_orientation_reward
+
+            if ( (self.get_speed() == 0) and (source_left or source_right) ):
+                speed_reward = -self.food_move_reward
+            elif ( delta_ori_has_source and speed_increase ):
+                speed_reward = -self.food_move_reward * attempted_delta_speed
+            elif ( not delta_ori_has_source and speed_decrease ):
+                speed_reward = -self.food_move_reward * attempted_delta_speed
+            else:
+                speed_reward = self.food_move_reward * attempted_delta_speed
+
+        elif ( source_name == self.get_name() ):
+            # If right in front of character, slow down and turn
+
+            left_heading_penalty = 0
+            for ray in range(
+                min(          0,eyes.left_heading_orientation_ray-1),
+                max(eyes.n_rays,eyes.left_heading_orientation_ray+1)
+            ):
+                # Reverse vision distance formula
+                dist =  ( 1. - np.sqrt(eyes.get_left_eye_values(source_name)[ray]) ) * eyes.max_dist
+
+                mult = 1.
+                if ( ray == eyes.left_heading_orientation_ray ):
+                    mult = 3.
+
+                if ( dist < 4. * self.size ):
+                    left_heading_penalty += mult * eyes.get_left_eye_values(source_name)[ray]
+
+            right_heading_penalty = 0
+            for ray in range(
+                min(          0,eyes.right_heading_orientation_ray-1),
+                max(eyes.n_rays,eyes.right_heading_orientation_ray+1)
+            ):
+                # Reverse vision distance formula
+                dist =  ( 1. - np.sqrt(eyes.get_right_eye_values(source_name)[ray]) ) * eyes.max_dist
+
+                mult = 1.
+                if ( ray == eyes.right_heading_orientation_ray ):
+                    mult = 3.
+
+                if ( dist < 4. * self.size ):
+                    right_heading_penalty += mult * eyes.get_right_eye_values(source_name)[ray]
+
+            if ( (left_heading_penalty > 0) or (right_heading_penalty > 0) ):
+
+                if ( left_heading_penalty >= right_heading_penalty ):
+                    orientation_reward =-self.self_orientation_reward * left_heading_penalty
+                else:
+                    orientation_reward = self.self_orientation_reward * right_heading_penalty
+
+                if ( self.get_speed() > 0 ):
+                    speed_reward = self.self_move_reward
 
         return orientation_reward, speed_reward
 
@@ -549,72 +608,25 @@ class Prey(Character):
 
             acceleration = ( self.get_speed() - prev_speed ) / timestep
 
-            orientation_reward, speed_reward = self.learn_food_source(
-                orientation_change_radians,
-                acceleration
-            )
+            orientation_reward = 0
+            speed_reward = 0
 
-            '''
-            left_turn = delta_orientation > 0
-            right_turn = delta_orientation < 0
+            # Uncomment when training
+            for source in [
+                #self.food_source,
+                self.get_name(),
+                #self.food_of
+            ]:
+                if ( source is None ):
+                    continue
 
-            expected_heading_angle_l = 0
-            l_sum = 1e-9
-            l_base = eyes.left_ray_angles[0]
-
-            expected_heading_angle_r = 0
-            r_sum = 1e-9
-            r_base = eyes.right_ray_angles[0]
-
-            for ray in range(eyes.n_rays):
-                l_sum += eyes.get_left_eye_values(food_source_name)[ray]
-                l_ori = l_base - eyes.ray_width * ray
-                expected_heading_angle_l += l_ori*eyes.get_left_eye_values(food_source_name)[ray]
-
-                r_sum += eyes.get_right_eye_values(food_source_name)[ray]
-                r_ori = 2*math.pi - (r_base - eyes.ray_width * ray)
-                expected_heading_angle_r += r_ori*eyes.get_right_eye_values(food_source_name)[ray]
-
-            expected_heading_angle_l = expected_heading_angle_l/l_sum
-            expected_heading_angle_r = expected_heading_angle_r/r_sum
-            expected_heading_angle = min(
-                max(
-                    (
-                        (expected_heading_angle_l * l_sum - expected_heading_angle_r * r_sum ) /
-                        ( l_sum + r_sum )
-                    ),
-                    -2*math.pi * timestep
-                ),
-                2*math.pi * timestep
-            )
-
-            food_left  = eyes.left_side_has [food_source_name]
-            food_right = eyes.right_side_has[food_source_name]
-
-            orientation_reward = 0.
-            orientation_reward = ( delta_orientation - expected_heading_angle ) * self.food_orientation_reward
-
-
-            l_ray = int( ( delta_orientation - l_base ) / (-eyes.ray_width) )
-            r_ray = int( ( delta_orientation - r_base ) / (-eyes.ray_width) )
-            delta_ori_has_food = False
-            if (
-                ( ( l_ray < eyes.n_rays ) and ( l_ray >= 0 ) ) or
-                ( ( r_ray < eyes.n_rays ) and ( r_ray >= 0 ) )
-            ):
-                delta_ori_has_food = True
-
-            delta_speed = self.get_speed() - prev_speed
-            speed_increase = delta_speed > 0
-            speed_decrease = delta_speed < 0
-            speed_reward = 0.
-            if ( self.get_speed() == 0 ):
-                speed_reward = -self.food_move_reward
-            elif ( delta_ori_has_food == speed_increase ):
-                speed_reward = -self.food_move_reward * delta_speed
-            else:
-                speed_reward = self.food_move_reward * delta_speed
-            '''
+                new_orientation_reward, new_speed_reward = self.learn_food_source(
+                    source,
+                    orientation_change_radians,
+                    acceleration
+                )
+                orientation_reward += new_orientation_reward
+                speed_reward += new_speed_reward
 
             if ( isinstance(self.brain,NN.NeuralNetwork) ):
                 input_list = self.get_interpret_vars()
@@ -746,7 +758,8 @@ class Prey(Character):
     def spawn(self,x,y):
         if (not self.reproduces):
             return None
-        self.energy.decrease(abs(self.spawn_energy_delta))
+        if (self.has_energy):
+            self.energy.decrease(abs(self.spawn_energy_delta))
         self.spawn_last_t = 0.0
 
         child = Prey(
@@ -868,4 +881,5 @@ class Prey(Character):
 
 class Predator(Prey):
     def get_name(self):
+        self.name = 'predator'
         return 'predator'

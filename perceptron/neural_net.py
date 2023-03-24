@@ -236,8 +236,11 @@ class NeuralNetwork:
         if (isinstance(weights,list)):
             assert len(weights)==self.n_layers
             layer_weights = weights
+        elif ( weights is None ):
+            for i in range(0,self.n_layers):
+                layer_weights.append( weights )
         else:
-            # Constant values makes the network useless, implement slight offset
+            # Constant values makes the network useless, implement slight offset in that case
             counter = 1.
             for i in range(0,self.n_layers):
                 layer_weights.append( weights + counter * const_layer_offset )
@@ -249,6 +252,9 @@ class NeuralNetwork:
         if (isinstance(biases,list)):
             assert len(biases)==self.n_layers
             layer_biases = biases
+        elif ( biases is None ):
+            for i in range(0,self.n_layers):
+                layer_biases.append( biases )
         else:
             # Constant values makes the network useless, implement slight offset
             counter = 1.

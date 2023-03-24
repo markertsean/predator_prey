@@ -12,6 +12,7 @@ sys.path.append(HOMEDIR)
 import perceptron.neural_net as NN
 import perceptron.complex_brain as CB
 from perceptron import activation
+import characters.parameters
 
 AF_DICT = {
     'identity':activation.identity,
@@ -19,6 +20,10 @@ AF_DICT = {
     'tanh':activation.tanh,
     'relu':activation.relu,
 }
+
+AF_DICT_T = {}
+for key in AF_DICT:
+    AF_DICT_T[AF_DICT[key]] = key
 
 def interpret_conf(val):
     if (val == 'None'):
@@ -58,11 +63,14 @@ def read_conf():
 
     return out_dict
 
-def save_nn(inp_nn,param_dict):
+def save_nn(inp_eyes,inp_nn,param_dict):
     global HOMEDIR
-    out_path = HOMEDIR+'data/brains/gen_brain_inputs_{}_layers_{}/'.format(
-        param_dict['NN_input_shape'],
-        '_'.join([ str(x) for x in param_dict['NN_layers'] ])
+    out_path = HOMEDIR+'data/brains/gen_brain_off_{}_fov_{}_rays_{}_layers_{}_af_{}/'.format(
+        inp_eyes.offset_angle,
+        inp_eyes.fov,
+        inp_eyes.n_rays,
+        '_'.join([ str(x) for x in inp_nn.get_layer_sizes() ]),
+        '_'.join([ str(AF_DICT_T[x]) for x in param_dict['NN_layer_afs'] ])
     )
     out_fn = param_dict['out_file_name']
     if ( param_dict['append_date'] ):
@@ -75,7 +83,7 @@ def save_nn(inp_nn,param_dict):
             brain_var_list.append(key)
 
     var_order_list = []
-    for i in range( param_dict['NN_input_shape'] ):
+    for i in range( 2 * inp_eyes.n_rays ):
         var_list = []
         for key in sorted( brain_var_list ):
             if ( param_dict[key] == 'i' ):
@@ -104,12 +112,12 @@ def save_nn(inp_nn,param_dict):
         pkl.dump(brain_output,f)
     print("Wrote ",out_full)
 
-def train( inp_nn, param_dict ):
+def train( inp_eyes, inp_nn, param_dict ):
     iter_max = param_dict['epochs']
     for i in range( iter_max ):
         inputs = param_dict['NN_min_val'] + (
                 param_dict['NN_max_val'] - param_dict['NN_min_val']
-            ) * np.random.rand( param_dict['NN_input_shape'] )
+            ) * np.random.rand( 2 * inp_eyes.n_rays )
         o_err, s_error = (1.,1.)
 
         inp_nn.backprop(
@@ -128,16 +136,24 @@ def main():
         print("{:40s}\t{}".format(key,in_dict[key]))
     print()
 
+    eyes = characters.parameters.VisionObj(
+        in_dict['eye_offset'],
+        in_dict['eye_FOV'],
+        1.0,
+        in_dict['eye_n_rays'],
+        ['dummy'],
+    )
+
     base_NN = NN.NeuralNetwork(
-        in_dict['NN_input_shape'],
+        in_dict['eye_n_rays'] * 2,
         in_dict['NN_layers'],
         in_dict['NN_weights'],
         in_dict['NN_biases'],
         in_dict['NN_layer_afs'],
     )
-    train(base_NN,in_dict)
+    train(eyes,base_NN,in_dict)
 
-    save_nn( base_NN, in_dict )
+    save_nn( eyes, base_NN, in_dict )
 
 if __name__ == '__main__':
     main()

@@ -203,24 +203,24 @@ class VisionObj:
         left_min = self.offset_angle + self.fov / 2. - self.ray_width / 2.
 
         self.left_heading_orientation_ray = 0
-        left_heading_orientation_val = 0
+        left_heading_orientation_val = 2*math.pi
 
         self.left_ray_angles = np.zeros(self.n_rays)
         for i in range(0,self.n_rays):
             self.left_ray_angles[i] = (-self.ray_width*i+left_min) % (2*math.pi)
-            if ( abs( self.left_ray_angles[i] - math.pi ) > left_heading_orientation_val ):
+            if ( abs( self.left_ray_angles[i] % (2*math.pi) ) < left_heading_orientation_val ):
                 self.left_heading_orientation_ray = i
-                left_heading_orientation_val = abs( self.left_ray_angles[i] - math.pi )
+                left_heading_orientation_val = abs( self.left_ray_angles[i] % (2*math.pi) )
 
         self.right_heading_orientation_ray = 0
-        right_heading_orientation_val = 0
+        right_heading_orientation_val = 2 * math.pi
 
         self.right_ray_angles = np.zeros(self.n_rays)
         for i in range(0,self.n_rays):
             self.right_ray_angles[i] = (-self.left_ray_angles[i]) % (2*math.pi)
-            if ( abs( self.right_ray_angles[i] - math.pi ) > right_heading_orientation_val ):
+            if ( abs( self.right_ray_angles[i] % (2*math.pi) ) < right_heading_orientation_val ):
                 self.right_heading_orientation_ray = i
-                right_heading_orientation_val = abs( self.right_ray_angles[i] - math.pi )
+                right_heading_orientation_val = abs( self.right_ray_angles[i] % (2*math.pi) )
         self.right_ray_angles = self.right_ray_angles[::-1]
         self.bins_circle = 2*math.pi / self.fov * self.n_rays
 

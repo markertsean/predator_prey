@@ -706,8 +706,8 @@ class Prey(Character):
         new_list = []
         if ( allow_const ):
             prev_val = inp_list[0]
+            all_equal = True
             for i in range(0,len(inp_list)):
-                all_equal = True
                 if (prev_val != inp_list[i]):
                     all_equal = False
                     break
@@ -715,7 +715,7 @@ class Prey(Character):
             if all_equal:
                 new_val = Prey.mutated_value(prev_val,mutation_rate)
                 for j in range(0,len(inp_list)):
-                    new_list[i].append(new_val)
+                    new_list.append(new_val)
 
                 return new_val
 

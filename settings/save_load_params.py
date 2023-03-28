@@ -68,10 +68,12 @@ def load_char_brains(char_name,brain_version):
             )
         )[-1]
 
-    inp_path = get_brain_path(
-        brain_version,
-        False
-    )+char_name+".pkl"
+        inp_path = get_brain_path(
+            brain_version,
+            False
+        )+char_name+".pkl"
+    else:
+        inp_path = os.getcwd()+'/data/brains/'+brain_version
 
     brain_list = []
     with open( inp_path, 'rb' ) as f:

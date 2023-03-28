@@ -160,6 +160,7 @@ class Layer:
         )
         for neuron in self.neuron_list:
             out_str = out_str + neuron.__str__(n_indent+1)
+        out_str += "{}Bias: {}".format(tabs,self.bias)
         return out_str
 
     def __eq__(self,other):

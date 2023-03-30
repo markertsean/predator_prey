@@ -181,7 +181,11 @@ class Visualizer:
         n_plot_layers = len(input_layers)
 
         d_time = dict_time(self.current_time,self.time_step)
-        this_nn = self.brain_dict[d_time][self.examine_id]
+        #TODO: this is a bandaid solution to a bug where one obj class has a brain and other dont
+        try:
+            this_nn = self.brain_dict[d_time][self.examine_id]
+        except:
+            return
 
         # Set up brain colors based on height in graph, so is rainbow
         for i in range(0,this_static_dict['brain_inputs']):
@@ -389,18 +393,19 @@ def generate_active_char_scatter_df(name,char_dict,static_dict,time_step):
         brain_dict[d_t] = {}
         for idx,row in t_df.iterrows():
             i = row['id']
-            weights = row['brain_weights']
-            biases  = row['brain_biases']
-            afs     = static_dict[i]['brain_activation_functions']
-            layers  = static_dict[i]['brain_layer_sizes']
-            inputs  = static_dict[i]['brain_inputs']
-            brain_dict[d_t][i] = NN.NeuralNetwork(
-                inputs,
-                layers,
-                weights,
-                biases,
-                afs,
-            )
+            if ( 'brain_weights' in row ):
+                weights = row['brain_weights']
+                biases  = row['brain_biases']
+                afs     = static_dict[i]['brain_activation_functions']
+                layers  = static_dict[i]['brain_layer_sizes']
+                inputs  = static_dict[i]['brain_inputs']
+                brain_dict[d_t][i] = NN.NeuralNetwork(
+                    inputs,
+                    layers,
+                    weights,
+                    biases,
+                    afs,
+                )
     return char_df.merge(new_df,on='id',how='inner').drop(columns=brain_cols), brain_dict
 
 def output_static_plot(char_dict,static_dict):
@@ -452,7 +457,7 @@ def animate_plot(simulation_params,char_dict,static_dict,max_time):
             time_dfs.append( p_time_df )
             brain_dicts.update( brain_dict )
 
-    time_df = pd.concat( time_dfs )
+    time_df = pd.concat( time_dfs, ignore_index=True )
 
     my_visualizer = Visualizer(
         simulation_params,

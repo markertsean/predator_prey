@@ -136,14 +136,21 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     closest_ray_r_val = 0.
 
     for ray in range(inp_eyes.n_rays):
-        l_sum += inp_eyes.get_left_eye_values(source_name)[ray]
-        r_sum += inp_eyes.get_right_eye_values(source_name)[ray]
+        l_val = inp_eyes.get_left_eye_values(source_name)[ray]
+        r_val = inp_eyes.get_right_eye_values(source_name)[ray]
 
-        l_ori = l_base - inp_eyes.ray_width * ray
-        r_ori = 2*math.pi - (r_base - inp_eyes.ray_width * ray)
+        l_sum += l_val
+        r_sum += r_val
 
-        expected_heading_angle_l += l_ori*inp_eyes.get_left_eye_values (source_name)[ray]
-        expected_heading_angle_r += r_ori*inp_eyes.get_right_eye_values(source_name)[ray]
+        ang = inp_eyes.left_ray_angles[ray]
+        if ( ang > math.pi ):
+            ang = -(2*math.pi - ang)
+        expected_heading_angle_l += l_val*ang
+
+        ang = inp_eyes.right_ray_angles[ray]
+        if ( ang > math.pi ):
+            ang = -(2*math.pi - ang)
+        expected_heading_angle_r += r_val*ang
 
         if ( inp_eyes.get_left_eye_values(source_name)[ray] > closest_ray_l_val ):
             closest_ray_l_val = inp_eyes.get_left_eye_values(source_name)[ray]
@@ -156,7 +163,7 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     expected_heading_angle_l = expected_heading_angle_l/l_sum
     expected_heading_angle_r = expected_heading_angle_r/r_sum
     expected_heading_angle = (
-        (expected_heading_angle_l * l_sum - expected_heading_angle_r * r_sum ) /
+        ( (expected_heading_angle_l * l_sum) + (expected_heading_angle_r * r_sum) ) /
         ( l_sum + r_sum )
     )
 
@@ -173,9 +180,14 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     ):
         delta_ori_has_source = True
 
+    closest_ray_angle = attempted_delta_orientation
     closest_ray_angle = inp_eyes.left_ray_angles[closest_ray_l_i]
     if ( closest_ray_r_val > closest_ray_l_val ):
-        closest_ray_angle = - (2*math.pi - inp_eyes.right_ray_angles[closest_ray_r_i])
+        closest_ray_angle = inp_eyes.right_ray_angles[closest_ray_r_i]
+
+    if (closest_ray_angle > math.pi):
+        closest_ray_angle = 2*math.pi - closest_ray_angle
+
 
     speed_increase = attempted_delta_speed > 0
     speed_decrease = attempted_delta_speed < 0
@@ -242,7 +254,7 @@ def train_self(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     if ( (left_heading_penalty > 0) or (right_heading_penalty > 0) ):
 
         orientation_reward_score = 1.0
-        speed_reward_score = 2.0
+        speed_reward_score = 1.0
 
         main_ray = inp_eyes.left_ray_angles[leftmost_ray]
         if ( right_heading_penalty >= left_heading_penalty ):
@@ -266,10 +278,8 @@ def train_self(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
             attempted_delta_orientation - turn_ray
         )
 
-        if ( attempted_delta_speed > 0 ):
-            speed_reward = speed_reward_score * attempted_delta_speed
-        else:
-            speed_reward = 0.
+        # Always should be -1
+        speed_reward = speed_reward_score * ( attempted_delta_speed + 1 )
 
         return orientation_reward, speed_reward
     else:
@@ -428,6 +438,7 @@ def train( inp_eyes, inp_nn, param_dict ):
         )
         if ( ( i % (param_dict['epochs']/100) == 0 ) and (i>0) ):
             print("Trained epoch: {:09}".format(i))
+            #print(inp_nn)
 
     print(inp_nn)
 

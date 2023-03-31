@@ -221,7 +221,10 @@ class VisionObj:
             if ( abs( self.right_ray_angles[i] % (2*math.pi) ) < right_heading_orientation_val ):
                 self.right_heading_orientation_ray = i
                 right_heading_orientation_val = abs( self.right_ray_angles[i] % (2*math.pi) )
+
         self.right_ray_angles = self.right_ray_angles[::-1]
+        self.right_heading_orientation_ray = self.n_rays - self.right_heading_orientation_ray
+
         self.bins_circle = 2*math.pi / self.fov * self.n_rays
 
     def __eq__(self,other):

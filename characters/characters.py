@@ -311,7 +311,8 @@ class Prey(Character):
                 params['eye_offset'],
                 params['eye_fov'],
                 params['eye_dist'],
-                params['eye_rays']
+                params['eye_rays'],
+                params['eye_objs']
             )
 
             for obj in self.eyes.get_param("possible_objects"):

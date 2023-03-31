@@ -24,6 +24,7 @@ class char_config:
             ,'eye_fov': 30 * math.pi / 180
             ,'eye_dist': 0.25
             ,'eye_rays': 5
+            ,'eye_objs': []
 
             ,'brain': False
             ,'brain_layers':[2]

@@ -459,7 +459,7 @@ def animate_plot(simulation_params,char_dict,static_dict,max_time):
         food_source_df,
         time_df,
         static_dict,
-        brain_dict,
+        brain_dicts,
         max_time = max_time
     )
     my_visualizer.run_visualization()

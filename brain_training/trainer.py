@@ -26,6 +26,8 @@ for key in AF_DICT:
     AF_DICT_T[AF_DICT[key]] = key
 
 def learning_rate(epoch,halflife,lr):
+    if (halflife is None):
+        return lr
     return lr * ( 2.**(-1.0*epoch/halflife) )
 
 def interpret_conf(val):
@@ -116,6 +118,117 @@ def save_nn(inp_eyes,inp_nn,param_dict):
         pkl.dump(brain_output,f)
     print("Wrote ",out_full)
 
+def iterate_exp_array(inp_array,n,ind=-1):
+    inp_array[ind] += 1
+    if ( inp_array[ind] >= n ):
+        pass
+        # max 8, [ 9 ] -> [ 0, 1 ]
+        # [ 0, 9 ] -> [ 1, 2 ]
+        # [ 8, 9 ] -> [ 0, 1, 2 ]
+        # [ 0, 8, 9 ] -> [ 1, 2, 3 ]
+        if ( abs(ind) == inp_array.shape[0] ):
+            inp_array = np.zeros(inp_array.shape[0]+1)
+            for i in range(0,inp_array.shape[0]):
+                inp_array[i] = i
+        else:
+            inp_array = iterate_exp_array( inp_array, n, ind-1 )
+            inp_array[ind] = inp_array[ind-1] + 1
+    return inp_array
+
+# Inefficient but oh well
+def test_vision(inp_eyes,inp_nn,inp_params):
+    n_inputs = 2*inp_eyes.n_rays
+
+    inputs = np.zeros( n_inputs )
+    pred_ori, pred_speed = inp_nn.calc( inputs )
+    print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
+        pred_ori*180/math.pi,
+        pred_speed,
+        []
+    ))
+
+    exp_array = np.zeros( 1 )
+    max_iter = 1e3
+    c = 0
+    while c < max_iter:
+        c+=1
+
+        inputs = np.zeros( n_inputs )
+        angles = []
+        bad = False
+        for item in exp_array:
+            ind = round(item)
+            if ( ind < n_inputs ):
+                inputs[ind] = inp_params['vision_test_val']
+                if ( ind < inp_eyes.n_rays ):
+                    angles.append( round(180/math.pi*inp_eyes.left_ray_angles[ind]) )
+                else:
+                    angles.append( round(180/math.pi*inp_eyes.right_ray_angles[ind-n_inputs]) )
+            else:
+                bad = True
+        if ( bad ):
+            continue
+
+        pred_ori, pred_speed = inp_nn.calc( inputs )
+        print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
+            pred_ori*180,
+            pred_speed,
+            angles
+        ))
+
+        exp_array = iterate_exp_array( exp_array, n_inputs )
+        if ( exp_array.shape[0] > inp_params['vision_test_objs'] ):
+            break
+    #for n_obj in range(1,inp_params['vision_test_objs']+1):
+    #
+    #    exp_array = np.zeros( n_obj )
+    #    for i in range( 0, n_obj ):
+    #        exp_array[i] = i
+    #
+    #    print(exp_array)
+    #    for i in range( 0, n_inputs-1 ):
+    #        exp_array = iterate_exp_array( exp_array, i )
+    #        print(exp_array)
+    #    '''
+    #    0000 0001 1
+    #    0000 0010 2
+    #    0000 0100 4
+    #    ...
+    #    0000 0011 3
+    #    0000 0101 5
+    #    0000 1001 9
+    #
+    #
+    #    0000 0010 2
+    #
+    #
+    #    0000 0100 4
+    #
+    #    '''
+    #
+    #    #for i_obj in range(0,n_obj):
+    #    #not_all_at_end = True
+    #    #start_ind = 0
+    #    #while ( start_ind + n_obj < inp_eyes.n_rays ):
+    #    #    left  = np.zeros(inp_eyes.n_rays)
+    #    #    right = np.zeros(inp_eyes.n_rays)
+    #    #    for i_obj in range(0,n_obj):
+    #    #        '''
+    #    #        1 0 0 0    0 0 0 0
+    #    #        0 1 0 0    0 0 0 0
+    #    #        ...
+    #    #        1 1 0 0    0 0 0 0
+    #    #        1 0 1 0    0 0 0 0
+    #    #        ...
+    #    #        0 1 1 0    0 0 0 0
+    #    #        0 1 0 1    0 0 0 0
+    #    #        '''
+    #    #        pass
+    #    #    #    for i in range():
+    #    #    #if ( start_ind == (inp_eyes.n_rays) )
+
+
+
 # For food, want to turn towards where the most or closest food is
 def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     source_name = 'dummy'
@@ -135,6 +248,9 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     closest_ray_l_val = 0.
     closest_ray_r_val = 0.
 
+    avg_val = 0.0
+    n_rays_w_val = 1e-9
+
     for ray in range(inp_eyes.n_rays):
         l_val = inp_eyes.get_left_eye_values(source_name)[ray]
         r_val = inp_eyes.get_right_eye_values(source_name)[ray]
@@ -152,13 +268,22 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
             ang = -(2*math.pi - ang)
         expected_heading_angle_r += r_val*ang
 
-        if ( inp_eyes.get_left_eye_values(source_name)[ray] > closest_ray_l_val ):
+        if ( l_val > 1e-9 ):
+            n_rays_w_val += 1
+            avg_val += l_val
+        if ( r_val > 1e-9 ):
+            n_rays_w_val += 1
+            avg_val += r_val
+
+        if ( inp_eyes.get_left_eye_values(source_name)[ray] >= closest_ray_l_val ):
             closest_ray_l_val = inp_eyes.get_left_eye_values(source_name)[ray]
             closest_ray_l_i = ray
 
         if ( inp_eyes.get_right_eye_values(source_name)[ray] > closest_ray_r_val ):
             closest_ray_r_val = inp_eyes.get_right_eye_values(source_name)[ray]
             closest_ray_r_i = ray
+
+    avg_val = avg_val / n_rays_w_val
 
     expected_heading_angle_l = expected_heading_angle_l/l_sum
     expected_heading_angle_r = expected_heading_angle_r/r_sum
@@ -167,27 +292,21 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
         ( l_sum + r_sum )
     )
 
-    source_left  = inp_eyes.left_side_has [source_name]
-    source_right = inp_eyes.right_side_has[source_name]
-
-    l_ray = int( ( attempted_delta_orientation - l_base ) / (-inp_eyes.ray_width) )
-    r_ray = int( ( attempted_delta_orientation - r_base ) / (-inp_eyes.ray_width) )
-
-    delta_ori_has_source = False
-    if (
-        ( ( l_ray < inp_eyes.n_rays ) and ( l_ray >= 0 ) ) or
-        ( ( r_ray < inp_eyes.n_rays ) and ( r_ray >= 0 ) )
-    ):
-        delta_ori_has_source = True
-
     closest_ray_angle = attempted_delta_orientation
     closest_ray_angle = inp_eyes.left_ray_angles[closest_ray_l_i]
+    closest_ray_val   = closest_ray_l_val
     if ( closest_ray_r_val > closest_ray_l_val ):
-        closest_ray_angle = inp_eyes.right_ray_angles[closest_ray_r_i]
+        closest_ray_angle = -(2*math.pi - inp_eyes.right_ray_angles[closest_ray_r_i])
+        closest_ray_val   = closest_ray_r_val
 
-    if (closest_ray_angle > math.pi):
-        closest_ray_angle = 2*math.pi - closest_ray_angle
+    # If much closer to one source
+    if ( closest_ray_val > 1.3 * avg_val ):
+        if (closest_ray_angle > math.pi):
+            closest_ray_angle = 2*math.pi - closest_ray_angle
 
+        #print("Old heading ray:",expected_heading_angle * 180/math.pi)
+        expected_heading_angle = closest_ray_angle
+        #print("Using closest ray:",expected_heading_angle * 180/math.pi)
 
     speed_increase = attempted_delta_speed > 0
     speed_decrease = attempted_delta_speed < 0
@@ -198,22 +317,32 @@ def train_food(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     orientation_reward = 0.
     speed_reward = 0.
 
+    # If pointing the right way, reward correctly (neg for desired increase, pos for decrease)
+    if ( (l_sum < 1.e-8) and (r_sum < 1.e-8) ):
+        #print("No food")
+        speed_reward = food_move_reward * ( attempted_delta_speed - 1 )
+        expected_heading_angle = inp_eyes.ray_width
+    elif (
+        abs(expected_heading_angle) < 2*inp_eyes.ray_width
+    ):
+        #print("Food in heading")
+        speed_reward = food_move_reward * ( attempted_delta_speed - 1 )
+    else:
+        #print("Food not in heading")
+        speed_reward = food_move_reward * ( attempted_delta_speed + 1 )
+
     orientation_reward = (
         attempted_delta_orientation - expected_heading_angle
     ) * food_orientation_reward
 
-    # If pointing the right way, reward correctly (neg for desired increase, pos for decrease)
-    if ( abs( attempted_delta_orientation - expected_heading_angle ) < inp_eyes.ray_width ):
-        speed_reward = -food_move_reward * attempted_delta_speed
-    else:
-        speed_reward = food_move_reward * attempted_delta_speed * inp_eyes.n_rays
+    #print("Expected:",expected_heading_angle * 180/math.pi)
 
     return orientation_reward, speed_reward
 
 # For self, want to turn/slow when we are heading right at it closest food is
 def train_self(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
     source_name = 'dummy'
-    closeness = 0.15
+    closeness = 0.1
 
     # If right in front of character, slow down and turn
 
@@ -281,9 +410,24 @@ def train_self(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
         # Always should be -1
         speed_reward = speed_reward_score * ( attempted_delta_speed + 1 )
 
+        #x_print_l = "Left rays: "
+        #for ray in range(
+        #    max(              0,inp_eyes.left_heading_orientation_ray-1),
+        #    min(inp_eyes.n_rays,inp_eyes.left_heading_orientation_ray+2)
+        #):
+        #    x_print_l += "{}\t".format(ray)
+        #x_print_r = "Right rays: "
+        #for ray in range(
+        #    max(              0,inp_eyes.right_heading_orientation_ray-1),
+        #    min(inp_eyes.n_rays,inp_eyes.right_heading_orientation_ray+2)
+        #):
+        #    x_print_r += "{}\t".format(ray)
+        #print("Close object")
+        #print(x_print_l)
+        #print(x_print_r)
         return orientation_reward, speed_reward
     else:
-        return 0., -1e-2,
+        return attempted_delta_orientation, attempted_delta_speed
 
 # For prey, need to recognize predator and turn away sharply
 def train_my_predator(attempted_delta_orientation, attempted_delta_speed, inp_eyes):
@@ -384,6 +528,17 @@ def train_my_predator(attempted_delta_orientation, attempted_delta_speed, inp_ey
     else:
         return 0., -1e-2,
 
+def set_vision( inp_eyes, param_dict ):
+    inp_eyes.reset_vision()
+
+    size = param_dict['train_obj_size']
+    for i in range( 0, param_dict['n_train_obj'] ):
+        dist = 1.5 * random.random() + size
+        angle_l = random.random() * 2 * math.pi
+        angle_r = 2 * math.atan( size / ( 2 * dist ) ) + angle_l
+
+        inp_eyes.place_in_vision('dummy',dist,angle_l,angle_r)
+
 def train( inp_eyes, inp_nn, param_dict ):
     iter_max = param_dict['epochs']
 
@@ -397,36 +552,48 @@ def train( inp_eyes, inp_nn, param_dict ):
     assert method in training_dict
 
     print(inp_nn)
-    
+
+    zero_inputs = 0.
+
     for i in range( iter_max ):
-        inputs = param_dict['NN_min_val'] + (
-                param_dict['NN_max_val'] - param_dict['NN_min_val']
-            ) * np.random.rand( 2 * inp_eyes.n_rays )
-        for j in range(inputs.shape[0]):
-            if (random.random() < param_dict['zero_proba']):
-                inputs[j] = 0.
 
-        # Need the input in the eyes
-        inp_eyes.reset_vision()
-        for j in range( param_dict['eye_n_rays'] ):
-            inp_eyes.left ['dummy'][j] = inputs[j]
-            inp_eyes.right['dummy'][j] = inputs[j+param_dict['eye_n_rays']]
-
-        if ( np.sum( inp_eyes.left['dummy'] > 0 ) ):
-             inp_eyes.left_side_has['dummy'] = True
-        if ( np.sum( inp_eyes.right['dummy'] > 0 ) ):
-             inp_eyes.right_side_has['dummy'] = True
+        # Need the input in the eyes, can pull from them for calc
+        set_vision( inp_eyes, param_dict )
+        inputs = []
+        no_vals = True
+        for side in [inp_eyes.left,inp_eyes.right]:
+            for val in side['dummy']:
+                if (val > 0):
+                    no_vals = False
+                inputs.append(val)
+        if (no_vals):
+            zero_inputs += 1
 
         orientation_change_tanh, speed_change_tanh = inp_nn.calc( inputs )
         orientation_change_radians = math.pi * orientation_change_tanh
 
-        o_err_rad, s_err = training_dict[method](
-            orientation_change_radians,
-            speed_change_tanh,
-            inp_eyes
-        )
-        o_err = o_err_rad / math.pi
+        #print(30*"=")
+        #print([ str(round(x*180/math.pi)) for x in inp_eyes.left_ray_angles ])
+        #print([ str(round(x*180/math.pi)) for x in inp_eyes.right_ray_angles])
+        #print("Ray width:",inp_eyes.ray_width*180/math.pi)
+        #print(inp_eyes.left['dummy'])
+        #print(inp_eyes.right['dummy'])
+        #print("Ori att:",orientation_change_tanh)
+        #print("Ori ang:",orientation_change_radians*180/math.pi)
 
+        o_err = orientation_change_tanh
+        s_err = speed_change_tanh
+        #o_err_rad, s_err = training_dict[method](
+        #    orientation_change_radians,
+        #    speed_change_tanh,
+        #    inp_eyes
+        #)
+        #o_err = o_err_rad / math.pi
+
+        #print("Ori err ang:",o_err_rad*180/math.pi)
+        #print("Ori err tan:",o_err)
+        #print("Speed att:",speed_change_tanh)
+        #print("Speed err:",s_err)
         '''
         Want pred value to decrease - positive error
         Want pred value to increase - negative error
@@ -436,9 +603,12 @@ def train( inp_eyes, inp_nn, param_dict ):
             [o_err,s_err],
             learning_rate(i,param_dict['NN_learning_halflife'],param_dict['NN_learning_rate'])
         )
-        if ( ( i % (param_dict['epochs']/100) == 0 ) and (i>0) ):
+        #if ( ( i % (param_dict['epochs']/100) == 0 ) and (i>0) ):
+        if ( ( i % (param_dict['epochs']/10) == 0 ) and (i>0) ):
             print("Trained epoch: {:09}".format(i))
             #print(inp_nn)
+
+    print("{} epochs, {:05.1f}% were zero inputs".format(iter_max,100*zero_inputs/iter_max))
 
     print(inp_nn)
 
@@ -467,7 +637,11 @@ def main():
     )
     train(eyes,base_NN,in_dict)
 
-    save_nn( eyes, base_NN, in_dict )
+    if ( in_dict['save'] ):
+        save_nn( eyes, base_NN, in_dict )
+
+    if ( in_dict['vision_test'] ):
+        test_vision(eyes,base_NN,in_dict)
 
 if __name__ == '__main__':
     main()

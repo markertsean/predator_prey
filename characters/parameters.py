@@ -192,10 +192,6 @@ class VisionObj:
         self.left_side_has = {}
         self.right_side_has = {}
         self.possible_objects = objs_to_see
-        self.closest_left_bin = {}
-        self.closest_right_bin = {}
-        self.closest_left_bin_val = {}
-        self.closest_right_bin_val = {}
 
         self.reset_vision()
 
@@ -265,10 +261,6 @@ class VisionObj:
             self.right[obj] = np.zeros(self.n_rays)
             self.left_side_has[obj] = False
             self.right_side_has[obj] = False
-            self.closest_left_bin[obj] = 0
-            self.closest_right_bin[obj] = 0
-            self.closest_left_bin_val[obj] = 0.
-            self.closest_right_bin_val[obj] = 0.
 
     def get_left_right_bins(self,orientation):
         bins = []
@@ -301,6 +293,11 @@ class VisionObj:
             left_bin  = ( left_angle - base ) / step
             right_bin = ( right_angle-left_angle ) / step + left_bin
 
+            if ( left_bin > right_bin ):
+                temp_bin = right_bin
+                right_bin = left_bin
+                left_bin = temp_bin
+
             for this_bin_pre in range(max(0,int(left_bin)),int(right_bin)+1):
                 this_bin = int(this_bin_pre % self.bins_circle)
                 if (
@@ -308,37 +305,6 @@ class VisionObj:
                     ( lr[obj_type][this_bin] < vision_dist )
                 ):
                     lr[obj_type][this_bin] = vision_dist
-
-                    if (
-                        (lr_str == 'left') and
-                        (
-                            (vision_dist > self.closest_left_bin_val[obj_type]) or
-                            (
-                                (vision_dist == self.closest_left_bin_val[obj_type]) and
-                                (
-                                    abs(this_bin - self.left_heading_orientation_ray) <
-                                    abs(self.closest_left_bin[obj_type] - self.left_heading_orientation_ray)
-                                )
-                            )
-                        )
-                    ):
-                        self.closest_left_bin[obj_type] = this_bin
-                        self.closest_left_bin_val[obj_type] = vision_dist
-                    if (
-                        (lr_str == 'right') and
-                        (
-                            (vision_dist > self.closest_right_bin_val[obj_type]) or
-                            (
-                                (vision_dist == self.closest_right_bin_val[obj_type]) and
-                                (
-                                    abs(this_bin - self.right_heading_orientation_ray) <
-                                    abs(self.closest_right_bin[obj_type] - self.right_heading_orientation_ray)
-                                )
-                            )
-                        )
-                    ):
-                        self.closest_right_bin[obj_type] = this_bin
-                        self.closest_right_bin_val[obj_type] = vision_dist
 
                     if (
                         ( left_angle % (2*math.pi) < math.pi) or

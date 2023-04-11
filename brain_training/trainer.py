@@ -138,6 +138,8 @@ def iterate_exp_array(inp_array,n,ind=-1):
 
 # Inefficient but oh well
 def test_vision(inp_eyes,inp_nn,inp_params):
+    global training_dict
+    method = inp_params['training_method']
     n_inputs = 2*inp_eyes.n_rays
 
     inputs = np.zeros( n_inputs )
@@ -170,12 +172,30 @@ def test_vision(inp_eyes,inp_nn,inp_params):
         if ( bad ):
             continue
 
-        pred_ori, pred_speed = inp_nn.calc( inputs )
-        print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
-            pred_ori*180,
-            pred_speed,
-            angles
-        ))
+        if ( inp_params['vision_test'] ):
+            pred_ori, pred_speed = inp_nn.calc( inputs )
+            print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
+                pred_ori*180,
+                pred_speed,
+                angles
+            ))
+
+
+        elif( inp_params['dry_run'] ):
+            inp_eyes.reset_vision()
+            inp_eyes.left['dummy' ] = inputs[:inp_eyes.n_rays]
+            inp_eyes.right['dummy'] = inputs[inp_eyes.n_rays:2*inp_eyes.n_rays]
+            neg_ori_pred, neg_s_pred = training_dict[method](
+                0.0,
+                0.0,
+                inp_eyes,
+                inp_params
+            )
+            print("Calc ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
+                -neg_ori_pred*180/math.pi,
+                -neg_s_pred,
+                angles
+            ))
 
         exp_array = iterate_exp_array( exp_array, n_inputs )
         if ( exp_array.shape[0] > inp_params['vision_test_objs'] ):
@@ -514,12 +534,7 @@ def train( inp_eyes, inp_nn, param_dict ):
     iter_max = param_dict['epochs']
 
     method = param_dict['training_method']
-    training_dict = {
-        'food':train_food,
-        'self':train_self,
-        'prey':train_self,
-        'predator':train_my_predator,
-    }
+    global training_dict
     assert method in training_dict
 
     print(inp_nn)
@@ -612,13 +627,22 @@ def main():
         in_dict['NN_biases'],
         in_dict['NN_layer_afs'],
     )
-    train(eyes,base_NN,in_dict)
+    # Only need to train if we need the net
+    if ( in_dict['save'] or in_dict['vision_test'] ):
+        train(eyes,base_NN,in_dict)
 
     if ( in_dict['save'] ):
         save_nn( eyes, base_NN, in_dict )
 
-    if ( in_dict['vision_test'] ):
+    if ( in_dict['vision_test'] or in_dict['dry_run'] ):
         test_vision(eyes,base_NN,in_dict)
+
+training_dict = {
+    'food':train_food,
+    'self':train_self,
+    'prey':train_self,
+    'predator':train_my_predator,
+}
 
 if __name__ == '__main__':
     main()

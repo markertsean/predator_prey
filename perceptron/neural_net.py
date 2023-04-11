@@ -235,7 +235,7 @@ class NeuralNetwork:
         if (weights is not None):
             assert isinstance(weights,(int,float,list))
         if (isinstance(weights,list)):
-            assert len(weights)==self.n_layers
+            assert len(weights)==self.n_layers, "Layers: {} Inp Weights Len {} Inp Weights {}".format(self.n_layers,len(weights),weights)
             layer_weights = weights
         elif ( weights is None ):
             for i in range(0,self.n_layers):

@@ -69,7 +69,7 @@ class Neuron:
                 n = len(x)
             else:
                 n = x.shape[0]
-            assert n == n_inputs
+            assert n == n_inputs, str(n) + " is not equal to " + str(n_inputs)
             for i in range(0,n):
                 x_array[i] = x[i]
         return x_array

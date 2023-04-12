@@ -43,7 +43,6 @@ def interpret_conf(val):
     elif (val[0].isalpha()):
         return val
     elif ( ('[' in val) or (']' in val) ):
-        print(val)
         if ( '[' in val[1:-1] ):
             return ast.literal_eval(val)
         else:
@@ -136,6 +135,163 @@ def iterate_exp_array(inp_array,n,ind=-1):
             inp_array[ind] = inp_array[ind-1] + 1
     return inp_array
 
+def create_default_self( inp_eyes, inp_params ):
+
+    min_gate_weights = []
+    for ray in range( 0, inp_eyes.n_rays * 2):
+        min_gate_weights.append([])
+        for x_ray in range( 0, inp_eyes.n_rays * 2 ):
+            min_gate_weights[-1].append(0.)
+            if ( ray == x_ray ):
+                min_gate_weights[-1][-1] = 1.
+    print(len(min_gate_weights))
+    print(len(min_gate_weights[-1]))
+    print(min_gate_weights)
+    min_gate_bias = inp_params['default_cutoff_bias']
+
+    left_ori    = []
+    left_speed  = []
+    right_ori   = []
+    right_speed = []
+    for ray in range( 0, inp_eyes.n_rays ):
+        left_ori.append(0.)
+        left_speed.append(0.)
+        if ( abs( inp_eyes.left_heading_orientation_ray - ray ) <= 1 ):
+            left_ori  [-1] = -10.0
+            left_speed[-1] = -10.0
+
+        right_ori.append(0.)
+        right_speed.append(0.)
+        if ( abs( inp_eyes.right_heading_orientation_ray - ray ) <= 1 ):
+            right_ori  [-1] =   8.0
+            right_speed[-1] = -10.0
+
+    ori = left_ori + right_ori
+    speed = left_speed + right_speed
+    last_bias = 0.0
+
+    weights = [min_gate_weights,[ori,speed]]
+    biases  = [min_gate_bias,last_bias]
+
+    global AF_DICT
+
+    return NN.NeuralNetwork(
+        inp_eyes.n_rays * 2,
+        [inp_eyes.n_rays * 2,2],
+        weights,
+        biases,
+        [AF_DICT['relu'],AF_DICT['tanh']]
+    )
+
+def create_default_predator( inp_eyes, inp_params ):
+
+    min_gate_weights = []
+    for ray in range( 0, inp_eyes.n_rays * 2):
+        min_gate_weights.append([])
+        for x_ray in range( 0, inp_eyes.n_rays * 2 ):
+            min_gate_weights[-1].append(0.)
+            if ( ray == x_ray ):
+                min_gate_weights[-1][-1] = 1.
+    min_gate_bias = inp_params['default_cutoff_bias']
+
+    '''
+    y U [-pi,pi], Y U [-1,1]
+    y * pi = pi * tanh( x )
+    y = tanh( a x + b )
+    atanh( y ) = a x + b
+    atanh( y ) - b = a x
+    a = (atanh( y ) - b) / x
+    x = 1, always
+    a = atanh( y ) - b
+    | y=0 -> a=-b
+    b dependent on speed as well, make small and negative
+
+    y = 0 -> a = -b / pi
+    y = tanh( a x + b ) |x=0 -> -1/2 = tanh(b) b-> inf, choose arbitrary 3?
+    '''
+
+    ori_speed_bias = -1e-2
+    b = ori_speed_bias
+    left_ori    = []
+    left_speed  = []
+    right_ori   = []
+    right_speed = []
+    for ray in range( 0, inp_eyes.n_rays ):
+
+        x = ( inp_eyes.left_ray_angles[ray] ) % (2 * math.pi)
+        y = ( x - math.pi/2 ) % (2 * math.pi)
+        yy = -1/2. # Right turn
+        if ( x > math.pi ):
+            y = y - 2 * math.pi
+            yy = +1/2.
+        y /= math.pi
+
+        ang_factor = 1e-3
+        if ( abs(inp_eyes.left_ray_angles[ray] - math.pi) > math.pi/2 ):
+            ang_factor = math.cos( inp_eyes.left_ray_angles[ray] )
+        left_ori.append( math.atanh( yy ) * ang_factor - b )
+
+        x = ( inp_eyes.right_ray_angles[ray] ) % (2 * math.pi)
+        y = ( x - math.pi/2 ) % (2 * math.pi)
+        yy = -1/2. # Right turn
+        if ( x > math.pi ):
+            y = y - 2 * math.pi
+            yy = +1/2.
+        y /= math.pi
+
+        ang_factor = 1e-3
+        if ( abs(inp_eyes.right_ray_angles[ray] - math.pi) > math.pi/2 ):
+            ang_factor = math.cos( inp_eyes.right_ray_angles[ray] )
+        right_ori.append( math.atanh( yy ) * ang_factor - b )
+
+        speed = 1. - 1e-9
+        if ( abs(inp_eyes.left_ray_angles[ray] - math.pi) > math.pi/2 ):
+            speed = -math.cos( 2*inp_eyes.left_ray_angles[ray] ) * ( 1 - 1e-9 )
+        left_speed.append( math.atanh( speed ) - b )
+
+        speed = 1. - 1e-9
+        if ( abs(inp_eyes.right_ray_angles[ray] - math.pi) > math.pi/2 ):
+            speed = -math.cos( 2*inp_eyes.right_ray_angles[ray] ) * ( 1 - 1e-9 )
+        right_speed.append( math.atanh( speed ) - b )
+
+    ori = left_ori + right_ori
+    speed = left_speed + right_speed
+
+    weights = [min_gate_weights,[ori,speed]]
+    biases  = [min_gate_bias,ori_speed_bias]
+
+    global AF_DICT
+    return NN.NeuralNetwork(
+        inp_eyes.n_rays * 2,
+        [inp_eyes.n_rays * 2,2],
+        weights,
+        biases,
+        [AF_DICT['relu'],AF_DICT['tanh']]
+    )
+
+def print_calc_pred(kind,angles,pred_ori=None,pred_speed=None,calc_ori=None,calc_speed=None):
+    if ( kind == "vision_test" ):
+        assert (calc_ori is not None) and (calc_speed is not None)
+        print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
+            pred_ori,
+            pred_speed,
+            angles
+        ))
+    elif ( kind == "dry_run" ):
+        print("Calc ori change: {:+05.1f} deg\tCalc speed change: {:+05.3f}\tAngles: []".format(
+            calc_ori,
+            calc_speed,
+            angles
+        ))
+    else:
+        print("Ori change: C={:+06.1f} P={:+06.1f} deg\tSpeed change: C={:+05.3f} P={:+05.3f}\tAngles: {}".format(
+            calc_ori,
+            pred_ori,
+            calc_speed,
+            pred_speed,
+            angles
+        ))
+
 # Inefficient but oh well
 def test_vision(inp_eyes,inp_nn,inp_params):
     global training_dict
@@ -143,12 +299,35 @@ def test_vision(inp_eyes,inp_nn,inp_params):
     n_inputs = 2*inp_eyes.n_rays
 
     inputs = np.zeros( n_inputs )
-    pred_ori, pred_speed = inp_nn.calc( inputs )
-    print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
-        pred_ori*180/math.pi,
-        pred_speed,
-        []
-    ))
+    kind = None
+    pred_ori   = None
+    pred_speed = None
+    calc_ori   = None
+    calc_speed = None
+
+    if ( inp_params['vision_test'] ):
+        pred_ori_pre, pred_speed = inp_nn.calc( inputs )
+        pred_ori = pred_ori_pre * 180/math.pi
+        kind = 'vision_test'
+
+    if( inp_params['dry_run'] ):
+        inp_eyes.reset_vision()
+        inp_eyes.left['dummy' ] = inputs[:inp_eyes.n_rays]
+        inp_eyes.right['dummy'] = inputs[inp_eyes.n_rays:2*inp_eyes.n_rays]
+        neg_ori_calc, neg_s_calc = training_dict[method](
+            0.0,
+            0.0,
+            inp_eyes,
+            inp_params
+        )
+        calc_ori = -neg_ori_calc * 180/math.pi
+        calc_speed = -neg_s_calc
+        if ( kind == None ):
+            kind = 'dry_run'
+        else:
+            kind = 'both'
+
+    print_calc_pred(kind,[],pred_ori,pred_speed,calc_ori,calc_speed)
 
     exp_array = np.zeros( 1 )
     max_iter = 1e3
@@ -172,30 +351,30 @@ def test_vision(inp_eyes,inp_nn,inp_params):
         if ( bad ):
             continue
 
+        pred_ori   = None
+        pred_speed = None
+        calc_ori   = None
+        calc_speed = None
+
         if ( inp_params['vision_test'] ):
-            pred_ori, pred_speed = inp_nn.calc( inputs )
-            print("Pred ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
-                pred_ori*180,
-                pred_speed,
-                angles
-            ))
+            pred_ori_pre, pred_speed = inp_nn.calc( inputs )
+            pred_ori = pred_ori_pre * 180
 
-
-        elif( inp_params['dry_run'] ):
+        if( inp_params['dry_run'] ):
             inp_eyes.reset_vision()
             inp_eyes.left['dummy' ] = inputs[:inp_eyes.n_rays]
             inp_eyes.right['dummy'] = inputs[inp_eyes.n_rays:2*inp_eyes.n_rays]
-            neg_ori_pred, neg_s_pred = training_dict[method](
+            neg_ori_calc, neg_s_calc = training_dict[method](
                 0.0,
                 0.0,
                 inp_eyes,
                 inp_params
             )
-            print("Calc ori change: {:+05.1f} deg\tPred speed change: {:+05.3f}\tAngles: {}".format(
-                -neg_ori_pred*180/math.pi,
-                -neg_s_pred,
-                angles
-            ))
+            calc_ori = -neg_ori_calc * 180/math.pi
+            calc_speed = -neg_s_calc
+
+        print_calc_pred(kind,angles,pred_ori,pred_speed,calc_ori,calc_speed)
+
 
         exp_array = iterate_exp_array( exp_array, n_inputs )
         if ( exp_array.shape[0] > inp_params['vision_test_objs'] ):
@@ -359,24 +538,13 @@ def train_self(attempted_delta_orientation, attempted_delta_speed, inp_eyes, inp
         speed_reward_score = inp_params['train_speed_mod']
 
         main_ray = inp_eyes.left_ray_angles[leftmost_ray]
+        turn_ray =-math.pi/2
         if ( right_heading_penalty >= left_heading_penalty ):
-            main_ray = inp_eyes.right_ray_angles[rightmost_ray] - 2 * math.pi
+            main_ray = inp_eyes.right_ray_angles[rightmost_ray]
+            turn_ray = math.pi/2
 
-        turn_ray = math.pi/2
-        inp_eyes.left_ray_angles[
-            max(
-                inp_eyes.left_heading_orientation_ray-1,
-                0
-            )
-        ]
-        if ( left_heading_penalty >= right_heading_penalty ):
-            turn_ray =-math.pi/2
-            inp_eyes.right_ray_angles[
-                min(
-                    inp_eyes.right_heading_orientation_ray+1,
-                    inp_eyes.n_rays-1
-                )
-            ] - 2 * math.pi
+        if ( main_ray > math.pi ):
+            main_ray = main_ray - 2*math.pi
 
         orientation_reward = orientation_reward_score * (
             attempted_delta_orientation - turn_ray
@@ -466,34 +634,15 @@ def train_my_predator(attempted_delta_orientation, attempted_delta_speed, inp_ey
         avg_angle = math.atan2( y_avg, x_avg )
 
         #print("\tAvg angle:",avg_angle*180/math.pi)
-        turn_ray = avg_angle + math.pi#heading_avg + math.pi / 2
+        turn_ray = avg_angle - math.pi/2#heading_avg + math.pi / 2
+        if ( right_dist > left_dist ):
+            turn_ray = avg_angle + math.pi/2#heading_avg + math.pi / 2
         if ( turn_ray > math.pi ):
             turn_ray = turn_ray - 2 * math.pi
-        #if ( heading_avg < 0 ):
-        #    turn_ray = heading_avg - math.pi / 2
-        ## Turn away from closest predators
         if ( left_dist >= right_dist ):
             speed_dist = left_dist
-        #
-        #    main_ray = inp_eyes.left_ray_angles[left_ray]
-        #
-        #    # Default, turn right
-        #    turn_ray = main_ray - math.pi / 2
-        #
-        #    # If much is right, turn left
-        #    if ( right_sum > left_sum ):
-        #        turn_ray = main_ray + math.pi / 2
         else:
             speed_dist = right_dist
-        #
-        #    main_ray = inp_eyes.right_ray_angles[right_ray] - 2 * math.pi
-        #
-        #    # Default, turn left
-        #    turn_ray = main_ray + math.pi / 2
-        #
-        #    # Much is left, turn right
-        #    if ( left_sum > right_sum ):
-        #        turn_ray = main_ray - math.pi / 2
 
         turn_ray = max(minturn,min(maxturn,turn_ray))
 
@@ -502,12 +651,11 @@ def train_my_predator(attempted_delta_orientation, attempted_delta_speed, inp_ey
         )
 
         # Want speed to decrease if near our heading, speed up if to the side
-
         # Not actual distance, but vision distance metric (bigger is closer)
-        # 0 deg expect 1, +-90 deg expect -1, >90 expect -1
-        ang_factor = math.cos(2*turn_ray)
-        if ( abs(turn_ray) > math.pi/2 ):
-            ang_factor = -1.
+        ang_factor = 1.
+        temp_angle = avg_angle % (2*math.pi)
+        if ( abs(avg_angle-math.pi) > math.pi/2 ):
+            ang_factor = -math.cos(2*avg_angle)
         expected_speed_delta = speed_dist * ang_factor
         speed_reward = speed_reward_score * ( attempted_delta_speed - expected_speed_delta )
 
@@ -531,20 +679,23 @@ def set_vision( inp_eyes, param_dict ):
         inp_eyes.place_in_vision('dummy',dist,angle_l,angle_r)
 
 def train( inp_eyes, inp_nn, param_dict ):
-    iter_max = param_dict['epochs']
 
-    method = param_dict['training_method']
     global training_dict
+    method = param_dict['training_method']
     assert method in training_dict
 
     print(inp_nn)
 
+    iter_max = param_dict['epochs']
+    zero_epochs = param_dict['zero_epochs']
     zero_inputs = 0.
+    inp_eyes.reset_vision()
 
-    for i in range( 0, iter_max ):
+    for i in range( 0, iter_max + zero_epochs ):
 
         # Need the input in the eyes, can pull from them for calc
-        set_vision( inp_eyes, param_dict )
+        if ( i > zero_epochs ):
+            set_vision( inp_eyes, param_dict )
         inputs = []
         no_vals = True
         for side in [inp_eyes.left,inp_eyes.right]:
@@ -596,13 +747,19 @@ def train( inp_eyes, inp_nn, param_dict ):
             learning_rate(i,param_dict['NN_learning_halflife'],param_dict['NN_learning_rate'])
         )
         #if ( ( i % (param_dict['epochs']/100) == 0 ) and (i>0) ):
-        if ( ( i % (param_dict['epochs']/10) == 0 ) and (i>0) ):
+        if ( (param_dict['epochs']>0) and ( i % (param_dict['epochs']/10) == 0 ) and (i>0) ):
             print("Trained epoch: {:09}".format(i))
             #print(inp_nn)
 
-    print("{} epochs, {:05.1f}% were zero inputs".format(iter_max,100*zero_inputs/iter_max))
+    if ( iter_max+zero_epochs > 0 ):
+        print("{} epochs, {:05.1f}% were zero inputs".format(iter_max+zero_epochs,100*zero_inputs/(iter_max+zero_epochs)))
 
     print(inp_nn)
+
+default_brain_dict = {
+    'self':create_default_self,
+    'predator':create_default_predator,
+}
 
 def main():
     in_dict = read_conf()
@@ -627,15 +784,20 @@ def main():
         in_dict['NN_biases'],
         in_dict['NN_layer_afs'],
     )
+
+    if ( in_dict['default_brain'] is not None ):
+        global default_brain_dict
+        assert in_dict['default_brain'] in default_brain_dict
+        base_NN = default_brain_dict[in_dict['default_brain']]( eyes, in_dict )
     # Only need to train if we need the net
     if ( in_dict['save'] or in_dict['vision_test'] ):
         train(eyes,base_NN,in_dict)
 
-    if ( in_dict['save'] ):
-        save_nn( eyes, base_NN, in_dict )
-
     if ( in_dict['vision_test'] or in_dict['dry_run'] ):
         test_vision(eyes,base_NN,in_dict)
+
+    if ( in_dict['save'] ):
+        save_nn( eyes, base_NN, in_dict )
 
 training_dict = {
     'food':train_food,

@@ -17,9 +17,9 @@ def relu(x):
     return max(0,x)
 
 def deriv_identity(x):
-    ret = x/x
-    ret[np.isnan(ret)] = 1.
-    return ret
+    y=np.copy(x)
+    y[True] = 1.
+    return y
 
 def deriv_logistic(x):
     s = logistic(x)

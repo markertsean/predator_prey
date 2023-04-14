@@ -269,6 +269,87 @@ def create_default_predator( inp_eyes, inp_params ):
         [AF_DICT['relu'],AF_DICT['tanh']]
     )
 
+
+def create_default_food( inp_eyes, inp_params ):
+
+    gate_weights = []
+    for ray in range( 0, inp_eyes.n_rays * 2):
+        gate_weights.append([])
+        for x_ray in range( 0, inp_eyes.n_rays * 2 ):
+            gate_weights[-1].append(0.)
+            if ( ray == x_ray ):
+                gate_weights[-1][-1] = 2.
+    gate_bias = 0.
+
+    '''
+    layer - offset by -0.5 so don't have bias in next layer
+    layer - logistic activation to weight things close as closer, far as further, a = 15 b = -5 good
+    final layer - turn based on all layer input towards 0, speed up if pointing towards food else slow
+
+    y U [-pi,pi], Y U [-1,1]
+    y * pi = pi * tanh( x )
+    y = tanh( a x + b )
+    atanh( y ) = a x + b
+    atanh( y ) - b = a x
+    a = (atanh( y ) - b) / x
+
+    b dependent on speed as well, make small and positive
+
+    y = 0 -> a = -b / x
+    y = tanh( a x + b ) |x=0 -> 0 = tanh(b) b-> small, positive
+    '''
+
+    ori_speed_bias = 1e-2
+    b = ori_speed_bias
+    left_ori    = []
+    left_speed  = []
+    right_ori   = []
+    right_speed = []
+    for ray in range( 0, inp_eyes.n_rays ):
+
+        x = ( inp_eyes.left_ray_angles[ray] ) % (2 * math.pi)
+        if ( x > math.pi ):
+            x = x - 2 * math.pi
+        y = -x
+        yy = y / math.pi
+        z = -x / math.pi * np.sign(x)
+
+        left_ori.append( math.atanh( yy ) - b )
+
+        x = ( inp_eyes.right_ray_angles[ray] ) % (2 * math.pi)
+        if ( x > math.pi ):
+            x = x - 2 * math.pi
+        y = -x
+        yy = y / math.pi
+
+        right_ori.append( math.atanh( yy ) - b )
+
+        speed = -1. + 1e-9
+        if ( abs(inp_eyes.left_ray_angles[ray] - math.pi) > math.pi/2 ):
+            speed = math.cos( 2*inp_eyes.left_ray_angles[ray] ) * ( 1 - 1e-9 )
+        left_speed.append( math.atanh( speed ) - b )
+
+        speed = -1. + 1e-9
+        if ( abs(inp_eyes.right_ray_angles[ray] - math.pi) > math.pi/2 ):
+            speed = math.cos( 2*inp_eyes.right_ray_angles[ray] ) * ( 1 - 1e-9 )
+        right_speed.append( math.atanh( speed ) - b )
+
+
+    ori = left_ori + right_ori
+    speed = left_speed + right_speed
+
+    weights = [gate_weights,[ori,speed]]
+    biases  = [gate_bias,ori_speed_bias]
+
+    global AF_DICT
+    return NN.NeuralNetwork(
+        inp_eyes.n_rays * 2,
+        [inp_eyes.n_rays * 2,2],
+        weights,
+        biases,
+        [AF_DICT['tanh'],AF_DICT['tanh']]
+    )
+
 def print_calc_pred(kind,angles,pred_ori=None,pred_speed=None,calc_ori=None,calc_speed=None):
     if ( kind == "vision_test" ):
         assert (calc_ori is not None) and (calc_speed is not None)
@@ -759,6 +840,7 @@ def train( inp_eyes, inp_nn, param_dict ):
 default_brain_dict = {
     'self':create_default_self,
     'predator':create_default_predator,
+    'food':create_default_food,
 }
 
 def main():

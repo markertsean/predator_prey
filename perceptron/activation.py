@@ -29,15 +29,8 @@ def deriv_tanh(x):
     return (1. - tanh(x)**2)
 
 def deriv_relu(x):
-    if hasattr(x, '__iter__'):
-        Y = []
-        for y in x:
-            Y.append(deriv_relu(y))
-        if (isinstance(x,np.ndarray)):
-            return np.array(Y)
-        else:
-            return Y
-    else:
-        if (x>0):
-            return 1
-        return 0
+    y=np.copy(x)
+    ind = y>0
+    y[True] = 0.
+    y[ind] = 1.
+    return y

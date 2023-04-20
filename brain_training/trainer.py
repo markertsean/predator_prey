@@ -272,82 +272,182 @@ def create_default_predator( inp_eyes, inp_params ):
 
 def create_default_food( inp_eyes, inp_params ):
 
+    # Want to weight based on angles
+    angle_weights = []
+    w_tot = 1e-9
+    for ray in range( 0, inp_eyes.n_rays ):
+        w = inp_eyes.n_rays - ray
+        angle_weights.append(1./w)
+        w_tot += w
+    angle_weights = angle_weights + angle_weights[::-1]
+
+    angle_gate_weights = []
+    for ray in range( 0, inp_eyes.n_rays * 2):
+        angle_gate_weights.append([])
+        for x_ray in range( 0, inp_eyes.n_rays * 2 ):
+            angle_gate_weights[-1].append(0.)
+            if ( ray == x_ray ):
+                angle_gate_weights[-1][-1] = angle_weights[ray]
+    angle_gate_bias = 0.
+
+    # Boost values back up a bit
     gate_weights = []
     for ray in range( 0, inp_eyes.n_rays * 2):
         gate_weights.append([])
         for x_ray in range( 0, inp_eyes.n_rays * 2 ):
             gate_weights[-1].append(0.)
             if ( ray == x_ray ):
-                gate_weights[-1][-1] = 2.
+                gate_weights[-1][-1] = 1.
     gate_bias = 0.
 
-    '''
-    layer - offset by -0.5 so don't have bias in next layer
-    layer - logistic activation to weight things close as closer, far as further, a = 15 b = -5 good
-    final layer - turn based on all layer input towards 0, speed up if pointing towards food else slow
+    # Three approx considerations - in front of us, need slight turn, need sharp turn
+    # If in heading, no turn
+    # If one off from heading, slight turn
+    # Otherwise, sharp turn
+    left_90        = np.zeros( 2*inp_eyes.n_rays ) # 90+ deg full stop, sharp turn
+    left_45        = np.zeros( 2*inp_eyes.n_rays ) # 45+ deg slow down, sharp turn
+    left_sharp     = np.zeros( 2*inp_eyes.n_rays ) # 45- deg small speed up, sharp turn
+    left_slight    = np.zeros( 2*inp_eyes.n_rays ) # One off heading speed up, slight turn
+    left_straight  = np.zeros( 2*inp_eyes.n_rays ) # Heading speed up, no turn
 
-    y U [-pi,pi], Y U [-1,1]
-    y * pi = pi * tanh( x )
-    y = tanh( a x + b )
-    atanh( y ) = a x + b
-    atanh( y ) - b = a x
-    a = (atanh( y ) - b) / x
+    right_90       = np.zeros( 2*inp_eyes.n_rays ) # 90+ deg full stop, sharp turn
+    right_45       = np.zeros( 2*inp_eyes.n_rays ) # 45+ deg slow down, sharp turn
+    right_sharp    = np.zeros( 2*inp_eyes.n_rays ) # 45- deg small speed up, sharp turn
+    right_slight   = np.zeros( 2*inp_eyes.n_rays ) # One off heading speed up, slight turn
+    right_straight = np.zeros( 2*inp_eyes.n_rays ) # Heading speed up, no turn
 
-    b dependent on speed as well, make small and positive
-
-    y = 0 -> a = -b / x
-    y = tanh( a x + b ) |x=0 -> 0 = tanh(b) b-> small, positive
-    '''
-
-    ori_speed_bias = 1e-2
-    b = ori_speed_bias
-    left_ori    = []
-    left_speed  = []
-    right_ori   = []
-    right_speed = []
+    sum_sharp = 0.
+    n_sharp   = 1e-6
+    sum_45    = 0.
+    n_45      = 1e-6
+    sum_90    = 0.
+    n_90      = 1e-6
     for ray in range( 0, inp_eyes.n_rays ):
+        angle = inp_eyes.left_ray_angles[ray] % (2*math.pi)
+        if ( ray == inp_eyes.left_heading_orientation_ray ):
+            left_straight[ray] = 1.
+        elif ( ray > inp_eyes.left_heading_orientation_ray ):
+            right_slight[ray] = 1
+        elif ( abs( ray - inp_eyes.left_heading_orientation_ray ) <= 1 ):
+            left_slight[ray] = 1.
+        elif ( abs( math.pi - inp_eyes.left_ray_angles[ray] ) > (3*math.pi/4) ):
+            left_sharp[ray] = 1.
+            sum_sharp += angle
+            n_sharp   += 1
+        elif ( abs( math.pi - inp_eyes.left_ray_angles[ray] ) > (math.pi/2) ):
+            left_45[ray] = 1.
+            sum_45 += angle
+            n_45   += 1
+        else:
+            left_90[ray] = 1.
+            sum_90 += angle
+            n_90   += 1
 
-        x = ( inp_eyes.left_ray_angles[ray] ) % (2 * math.pi)
-        if ( x > math.pi ):
-            x = x - 2 * math.pi
-        y = -x
-        yy = y / math.pi
-        z = -x / math.pi * np.sign(x)
-
-        left_ori.append( math.atanh( yy ) - b )
-
-        x = ( inp_eyes.right_ray_angles[ray] ) % (2 * math.pi)
-        if ( x > math.pi ):
-            x = x - 2 * math.pi
-        y = -x
-        yy = y / math.pi
-
-        right_ori.append( math.atanh( yy ) - b )
-
-        speed = -1. + 1e-9
-        if ( abs(inp_eyes.left_ray_angles[ray] - math.pi) > math.pi/2 ):
-            speed = math.cos( 2*inp_eyes.left_ray_angles[ray] ) * ( 1 - 1e-9 )
-        left_speed.append( math.atanh( speed ) - b )
-
-        speed = -1. + 1e-9
-        if ( abs(inp_eyes.right_ray_angles[ray] - math.pi) > math.pi/2 ):
-            speed = math.cos( 2*inp_eyes.right_ray_angles[ray] ) * ( 1 - 1e-9 )
-        right_speed.append( math.atanh( speed ) - b )
+        r_ray = ray + inp_eyes.n_rays
+        angle = inp_eyes.right_ray_angles[ray] % (2*math.pi)
+        if ( ray == inp_eyes.right_heading_orientation_ray ):
+            right_straight[r_ray] = 1.
+        elif ( ray < inp_eyes.right_heading_orientation_ray ):
+            left_slight[r_ray] = 1
+        elif ( abs( ray - inp_eyes.right_heading_orientation_ray ) <= 1 ):
+            right_slight[r_ray] = 1.
+        elif ( abs( math.pi - inp_eyes.right_ray_angles[ray] ) > (3*math.pi/4) ):
+            right_sharp[r_ray] = 1.
+        elif ( abs( math.pi - inp_eyes.right_ray_angles[ray] ) > (math.pi/2) ):
+            right_45[r_ray] = 1.
+        else:
+            right_90[r_ray] = 1.
 
 
-    ori = left_ori + right_ori
-    speed = left_speed + right_speed
+    category_bias  = 0.0
+    category_weights  = [
+        left_90
+        ,left_45
+        ,left_sharp
+        ,left_slight
+        ,left_straight
+        ,right_straight
+        ,right_slight
+        ,right_sharp
+        ,right_45
+        ,right_90
+    ] # 10 categories
 
-    weights = [gate_weights,[ori,speed]]
-    biases  = [gate_bias,ori_speed_bias]
+    # Next group a relu layer so we can cutoff outer if inner present
+    o_1 = -10.
+    o_2 = -20.
+    o_3 = -50.
+    o_4 = -100.
+    filter_bias = 0.0
+    filter_weights = [
+        [ 1.0, o_1, o_2, o_3, o_4, o_4, o_3, o_2, o_1, 0.0 ],
+        [ 0.0, 1.0, o_1, o_2, o_3, o_3, o_2, o_1, 0.0, 0.0 ],
+        [ 0.0, 0.0, 1.0, o_1, o_2, o_2, o_1, 0.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, 0.0, 1.0, o_1, o_1, 0.0, 0.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0 ],
 
+        [ 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, 0.0, 0.0, o_1, o_1, 1.0, 0.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, 0.0, o_1, o_2, o_2, o_1, 1.0, 0.0, 0.0 ],
+        [ 0.0, 0.0, o_1, o_2, o_3, o_3, o_2, o_1, 1.0, 0.0 ],
+        [ 0.0, o_1, o_2, o_3, o_4, o_4, o_3, o_2, o_1, 1.0 ],
+    ]
+
+    turn_angle_straight = inp_eyes.ray_width/2.
+    turn_angle_slight   = inp_eyes.ray_width/2.*3
+    turn_angle_sharp    = sum_sharp / n_sharp
+    turn_angle_45       = sum_45    / n_45
+    turn_angle_90       = sum_90    / n_90
+
+    print(turn_angle_straight*180/math.pi)
+    print(turn_angle_slight  *180/math.pi)
+    print(turn_angle_sharp   *180/math.pi)
+    print(turn_angle_45      *180/math.pi)
+    print(turn_angle_90      *180/math.pi)
+
+
+    r_mod = 0.98
+
+    # a = (atanh( y ) - b) / x
+    ori_speed_bias = 0.1
+    def get_weight(y,b=ori_speed_bias):
+        x_train = 0.5
+        return ( math.atanh( y/math.pi ) - b ) / x_train
+
+    ori = [
+        get_weight( turn_angle_90       ),
+        get_weight( turn_angle_45       ),
+        get_weight( turn_angle_sharp    ),
+        get_weight( turn_angle_slight   ),
+        get_weight( turn_angle_straight ),
+        get_weight( turn_angle_straight  * -r_mod ),
+        get_weight( turn_angle_slight    * -r_mod ),
+        get_weight( turn_angle_sharp     * -r_mod ),
+        get_weight( turn_angle_45        * -r_mod ),
+        get_weight( turn_angle_90        * -r_mod ),
+    ]
+    speed = [
+        -( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_45       ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_sharp    ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_slight   ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_straight ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_straight ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_slight   ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_sharp    ) * ( 1 - 1e-9 ),
+        math.cos( 2*turn_angle_45       ) * ( 1 - 1e-9 ),
+        -( 1 - 1e-9 )
+    ]
+
+    biases = [category_bias,filter_bias,ori_speed_bias]
+    weights = [category_weights,filter_weights,[ori,speed]]
     global AF_DICT
     return NN.NeuralNetwork(
         inp_eyes.n_rays * 2,
-        [inp_eyes.n_rays * 2,2],
+        [10,10,2],
         weights,
         biases,
-        [AF_DICT['tanh'],AF_DICT['tanh']]
+        [AF_DICT['tanh'],AF_DICT['relu'],AF_DICT['tanh']]
     )
 
 def print_calc_pred(kind,angles,pred_ori=None,pred_speed=None,calc_ori=None,calc_speed=None):
@@ -455,7 +555,6 @@ def test_vision(inp_eyes,inp_nn,inp_params):
             calc_speed = -neg_s_calc
 
         print_calc_pred(kind,angles,pred_ori,pred_speed,calc_ori,calc_speed)
-
 
         exp_array = iterate_exp_array( exp_array, n_inputs )
         if ( exp_array.shape[0] > inp_params['vision_test_objs'] ):

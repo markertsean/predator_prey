@@ -1,7 +1,7 @@
 from bokeh.io import curdoc
 from bokeh.plotting import figure, show
 from bokeh.layouts import column, row, widgetbox
-from bokeh.models import Range1d, ColumnDataSource, Button, Slider, TapTool, glyphs
+from bokeh.models import Range1d, ColumnDataSource, Button, Slider, TapTool, glyphs, AnnularWedge, Wedge
 from bokeh.events import Tap
 from bokeh.colors import HSL,RGB, Color
 import warnings
@@ -75,8 +75,6 @@ class Visualizer:
         self.prey_df = prey_pred_obj_df.copy()
         self.prey_df["color"] = self.prey_df["name"].apply(lambda c: colors[c])
 
-        self.prey_iter_df = self.prey_df.loc[self.prey_df['time']==self.current_time].copy()
-
         my_tools = 'pan,wheel_zoom,zoom_in,zoom_out,box_zoom,reset,tap'
         self.fig = figure( title="Box", x_axis_label="x", y_axis_label="y", sizing_mode='scale_height', tools=my_tools)
         self.fig.x_range = Range1d( bounds=(0,1) )
@@ -94,15 +92,26 @@ class Visualizer:
             line_alpha = 0.0
         )
 
-        self.prey_data_cols = ['id','x','y','speed','orientation','radius','color']
-        self.prey_fig = self.fig.circle(
+        slit_size = 10
+        self.prey_df['ori_left' ] = ( self.prey_df['orientation'] * 180/np.pi + slit_size / 2. ) % 360
+        self.prey_df['ori_right'] = ( self.prey_df['orientation'] * 180/np.pi - slit_size / 2. ) % 360
+        self.prey_iter_df = self.prey_df.loc[self.prey_df['time']==self.current_time].copy()
+
+        self.prey_data_cols = ['id','x','y','speed','ori_left','ori_right','radius','color']
+        self.prey_fig = self.fig.annular_wedge(
             source=ColumnDataSource(
                 self.prey_iter_df[self.prey_data_cols]
             ),
             x='x',
             y='y',
-            radius_units='data',
-            radius='radius',
+            inner_radius_units='data',
+            inner_radius=0.0,
+            outer_radius_units='data',
+            outer_radius='radius',
+            start_angle_units='deg',
+            end_angle_units='deg',
+            start_angle='ori_left',
+            end_angle='ori_right',
             fill_color = 'color',
             fill_alpha = 1.0,
             line_alpha = 0.0
